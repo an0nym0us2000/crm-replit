@@ -1,0 +1,39 @@
+9 Nov
+at 17:23
+Build a full-featured internal CRM and employee management system.
+
+Main Goals:
+
+Manage clients, leads, and deals. Track employees, assign and monitor their tasks, and track performance. Allow admin-level control to add/remove users and manage permissions. Provide a dashboard view summarizing company metrics.
+
+🔹 MODULE 1: AUTHENTICATION & USER ROLES
+
+Secure login system (email + password or Google SSO). Role-based access: Admin: full access to CRM, employees, tasks, analytics. Manager: can add/edit tasks, view assigned employees. Employee: can view and update only their assigned tasks. Admin dashboard to add or remove users and set their roles.
+
+🔹 MODULE 2: CRM DASHBOARD
+
+Overview dashboard showing total leads, deals in pipeline, clients, and conversion rate. Tabs: Leads, Clients, Deals, Contacts. Each lead/client record includes: Name, Company, Contact info Stage (Lead → Negotiation → Closed) Assigned Manager Notes and follow-ups Date added and last activity Kanban board to track deal stages visually.
+
+🔹 MODULE 3: EMPLOYEE MANAGEMENT
+
+Employee directory with name, role, department, status (active/inactive), and performance score. Ability to assign employees to clients, leads, or projects. Attendance tracking (check-in/check-out) with timestamp logs. Summary view showing total active employees, task completion rate, and performance insights.
+
+🔹 MODULE 4: TASK TRACKING SYSTEM
+
+Each task has: Title, Description, Priority (Low/Medium/High), Status (To Do/In Progress/Done) Assigned Employee(s) Due Date Attached files and comments. Managers can assign, edit, and remove tasks. Employees can update their own progress. Task filtering by status, assignee, and due date. Weekly and monthly performance reports auto-generated per employee.
+
+🔹 MODULE 5: ADMIN DASHBOARD
+
+Overview of all modules (Clients, Employees, Tasks, and Deals). Add/Remove/Modify users and permissions. Analytics section: Employee performance Task completion rate Revenue generated per client or project Conversion funnel Export data (CSV/PDF).
+
+🔹 MODULE 6: NOTIFICATIONS & AUTOMATION
+
+Real-time notifications: When new task is assigned When task deadline is near When new lead/client is added Email notifications for task deadlines and client follow-ups.
+
+🔹 MODULE 7: SETTINGS
+
+Profile settings (Name, Role, Profile Picture) Theme customization (light/dark mode) Company branding: logo, color scheme 🎨 UI / UX
+
+Clean modern dashboard layout with sidebar navigation. Use cards and tables for data. Use color indicators for task priorities and lead stages. Mobile-responsive. Name this platform: Launch CRM.
+
+make sure everything is functional and working and ready to use and no broken buttons or links are there and we can test out the full functionality
