@@ -8,7 +8,63 @@ The platform provides role-based access control (Admin, Manager, Employee) with 
 
 ## Recent Changes
 
-**November 9, 2025 - Critical Bug Fixes:**
+**November 9, 2025 - Posting Schedule Feature (PRODUCTION-READY):**
+
+Complete social media posting schedule management system with calendar and list views, bulk operations, and role-based permissions.
+
+**Feature Components:**
+
+1. **Database Schema (posting_schedule table):**
+   - Full CRUD support for social media posts across multiple platforms
+   - Foreign keys to social_profiles (cascade delete) and users (assignedTo, createdBy)
+   - Status tracking: draft, scheduled, published, failed
+   - Approval workflow: pending, approved, rejected
+   - Post types: text, image, video, carousel, story
+   - Nullable optional fields: assignedTo, mediaUrl, approvalStatus, publishResult, cloneOf
+   - Indexed on frequently queried fields (status, scheduledDateTime, profileId)
+
+2. **Backend Implementation:**
+   - **Storage Layer:** Role-based filtering via SQL in `getPostingScheduleForRole`
+   - **Permission Model:** Centralized `canModifyPost` helper for authorization
+   - **API Endpoints:** Full REST API with GET, POST, PATCH, DELETE, bulk delete
+   - **Data Validation:** Zod schemas, user ID validation, empty string to null conversion
+   - **Security:** Role-scoped queries prevent data leakage
+
+3. **Frontend Implementation:**
+   - **posting-schedule.tsx:** Main page with calendar/list view toggle, status/profile filters, bulk selection
+   - **post-form-dialog.tsx:** Create/edit dialog with profile selection, post type, caption, media URL, scheduling, status, approval, assignee
+   - **Navigation:** Sidebar integration with Calendar icon
+   - **State Management:** React Query with cache invalidation
+
+**Bug Fixes Applied During Development:**
+
+1. **Radix Select Error:** Removed empty value `<SelectItem>`, added "__NONE__" sentinel value for "Not assigned"
+2. **Schema Validation:** Omitted `createdBy` from insert schema (server adds after validation)
+3. **FK Constraints:** Backend converts empty strings to null for optional FK fields (assignedTo, cloneOf, publishResult, mediaUrl)
+4. **Date Handling:** Backend converts scheduledDateTime string to Date object
+5. **Un-assign UX:** Added "Not assigned" option, form converts "__NONE__" to empty string on submit
+6. **User Validation:** Backend validates assignedTo is valid user ID, sets to null if invalid
+
+**Key Features:**
+- ✅ Calendar and list view modes with seamless toggle
+- ✅ Filter by status (draft, scheduled, published, failed) and social profile
+- ✅ Bulk selection and delete with permission checks
+- ✅ Create/edit posts with media URL, scheduling, and approval workflows
+- ✅ Assign/un-assign/re-assign posts to team members
+- ✅ Role-based access: employees see own/assigned posts, managers see team posts, admins see all
+- ✅ Empty states with create CTAs
+- ✅ Real-time cache updates via React Query
+
+**Testing Status:**
+- ✅ All CRUD operations verified via end-to-end tests
+- ✅ Create, edit, delete, view toggling, filtering all passing
+- ✅ Assign/un-assign flows working correctly
+- ✅ No runtime errors, FK violations, or validation failures
+- ✅ Database stores NULL for unassigned posts (verified via SQL)
+- ✅ HTTP status codes correct (201 create, 200 update, 204 delete)
+- ✅ Production-ready per architect approval
+
+**November 9, 2025 - Earlier Bug Fixes:**
 
 1. **Authentication Crash Fix**
    - Fixed server crash on login with existing users
@@ -32,11 +88,6 @@ The platform provides role-based access control (Admin, Manager, Employee) with 
    - Restored proper TypeScript types in task and employee form dialogs
    - Removed `any` types in favor of specific interfaces
    - All forms now have full type safety with no LSP errors
-
-**Testing Status:**
-- ✅ End-to-end tests passing for authentication, attendance mark-in/out, and task creation
-- ✅ All critical user flows validated and working correctly
-- ✅ No security issues or data leakage observed
 
 ## User Preferences
 
@@ -72,7 +123,7 @@ Preferred communication style: Simple, everyday language.
 
 **Routing Structure:**
 - Public route: Landing page (`/`)
-- Protected routes: Dashboard, CRM, Employees, Tasks, Analytics, Admin, Settings
+- Protected routes: Dashboard, CRM, Employees, Tasks, Analytics, Attendance, Social Profiles, Posting Schedule, Admin, Settings
 - Route protection handled through authentication check in main App router
 - 404 handling with dedicated NotFound component
 
@@ -94,11 +145,12 @@ Preferred communication style: Simple, everyday language.
 
 **API Design:**
 - RESTful API endpoints under `/api` prefix
-- Resource-oriented routes for leads, deals, employees, tasks, users
+- Resource-oriented routes for leads, deals, employees, tasks, users, attendance, social_profiles, posting_schedule
 - Standard HTTP methods: GET (list/retrieve), POST (create), PATCH (update), DELETE (remove)
 - Consistent error handling with appropriate HTTP status codes
 - JSON request/response bodies
 - Request logging middleware for debugging
+- Role-based filtering and permission checks on all mutations
 
 **Data Access Layer:**
 - Storage abstraction through `IStorage` interface for testability
@@ -119,10 +171,13 @@ Preferred communication style: Simple, everyday language.
 - `users` table with role, status, and profile information
 - `leads` table for CRM lead tracking with stage pipeline
 - `deals` table for opportunity management with value and due dates
-- `employees` table for HR information (appears referenced but not in provided schema snippet)
+- `employees` table for HR information with department and position data
 - `tasks` table for task management with priority, status, and assignments
+- `attendance` table for employee attendance tracking in IST timezone
+- `social_profiles` table for social media account management (LinkedIn, Twitter, Facebook, Instagram)
+- `posting_schedule` table for social media post scheduling with approval workflows
 - UUID primary keys generated via PostgreSQL's `gen_random_uuid()`
-- Foreign key relationships using `assignedTo` references to users
+- Foreign key relationships using `assignedTo`, `createdBy`, `profileId` references with appropriate cascade rules
 
 **Data Validation:**
 - Zod schemas derived from Drizzle table definitions
