@@ -1,7 +1,8 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface UserAvatarProps {
   name: string;
+  imageUrl?: string | null;
   className?: string;
 }
 
@@ -29,12 +30,13 @@ function getColorFromName(name: string): string {
   return colors[charCode % colors.length];
 }
 
-export function UserAvatar({ name, className = "h-8 w-8" }: UserAvatarProps) {
+export function UserAvatar({ name, imageUrl, className = "h-8 w-8" }: UserAvatarProps) {
   const initials = getInitials(name);
   const colorClass = getColorFromName(name);
 
   return (
     <Avatar className={className} data-testid={`avatar-${name.toLowerCase().replace(/\s+/g, '-')}`}>
+      {imageUrl && <AvatarImage src={imageUrl} alt={name} className="object-cover" />}
       <AvatarFallback className={`${colorClass} text-white`}>
         {initials}
       </AvatarFallback>

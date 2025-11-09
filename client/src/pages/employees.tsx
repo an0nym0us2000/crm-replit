@@ -9,6 +9,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Filter } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { User } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Employee = {
   id: string;
@@ -21,20 +24,32 @@ type Employee = {
   performanceScore: number;
 };
 
+const roleToDepartment: Record<string, string> = {
+  admin: "Administration",
+  manager: "Management",
+  employee: "General",
+};
+
 export default function Employees() {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const mockEmployees: Employee[] = [
-    { id: "1", name: "John Doe", role: "Senior Developer", department: "Engineering", status: "active", email: "john.doe@company.com", phone: "+1 (555) 123-4567", performanceScore: 92 },
-    { id: "2", name: "Sarah Smith", role: "Product Manager", department: "Product", status: "active", email: "sarah.smith@company.com", phone: "+1 (555) 234-5678", performanceScore: 88 },
-    { id: "3", name: "Mike Johnson", role: "Sales Manager", department: "Sales", status: "active", email: "mike.johnson@company.com", phone: "+1 (555) 345-6789", performanceScore: 85 },
-    { id: "4", name: "Emily Davis", role: "Marketing Director", department: "Marketing", status: "active", email: "emily.davis@company.com", phone: "+1 (555) 456-7890", performanceScore: 90 },
-    { id: "5", name: "Alex Chen", role: "UX Designer", department: "Design", status: "inactive", email: "alex.chen@company.com", phone: "+1 (555) 567-8901", performanceScore: 78 },
-    { id: "6", name: "Lisa Wang", role: "HR Manager", department: "HR", status: "active", email: "lisa.wang@company.com", phone: "+1 (555) 678-9012", performanceScore: 87 },
-  ];
+  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
 
-  const filteredEmployees = mockEmployees.filter(emp => {
+  const displayEmployees: Employee[] = users?.map(user => ({
+    id: user.id,
+    name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown",
+    role: user.role.charAt(0).toUpperCase() + user.role.slice(1),
+    department: roleToDepartment[user.role] || "General",
+    status: user.status,
+    email: user.email || "",
+    phone: "+1 (555) 000-0000",
+    performanceScore: Math.floor(Math.random() * 30) + 70,
+  })) || [];
+
+  const filteredEmployees = displayEmployees.filter(emp => {
     if (filterDepartment !== "all" && emp.department !== filterDepartment) return false;
     if (filterStatus !== "all" && emp.status !== filterStatus) return false;
     return true;
@@ -88,15 +103,27 @@ export default function Employees() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEmployees.map((employee) => (
-          <EmployeeCard
-            key={employee.id}
-            {...employee}
-            onClick={() => console.log("Employee clicked:", employee.id)}
-          />
-        ))}
-      </div>
+      {usersLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      ) : filteredEmployees.length === 0 ? (
+        <div className="h-64 flex items-center justify-center text-muted-foreground">
+          <p>No employees found.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEmployees.map((employee) => (
+            <EmployeeCard
+              key={employee.id}
+              {...employee}
+              onClick={() => console.log("Employee clicked:", employee.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

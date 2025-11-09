@@ -4,8 +4,13 @@ import { DataTable, Column } from "@/components/data-table";
 import { CRMTableFilters } from "@/components/crm-table-filters";
 import { StatusBadge } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { LeadFormDialog } from "@/components/lead-form-dialog";
+import { useQuery } from "@tanstack/react-query";
+import type { Lead as LeadType, User } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatDistanceToNow } from "date-fns";
 
-type Lead = {
+type DisplayLead = {
   id: string;
   name: string;
   company: string;
@@ -17,16 +22,35 @@ type Lead = {
 
 export default function CRM() {
   const [selectedTab, setSelectedTab] = useState("leads");
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
 
-  const mockLeads: Lead[] = [
-    { id: "1", name: "John Smith", company: "Acme Corp", email: "john@acme.com", stage: "lead", assignedTo: "Sarah Smith", lastContact: "2 days ago" },
-    { id: "2", name: "Jane Doe", company: "TechStart", email: "jane@techstart.com", stage: "negotiation", assignedTo: "John Doe", lastContact: "1 day ago" },
-    { id: "3", name: "Bob Wilson", company: "InnovateCo", email: "bob@innovate.com", stage: "closed", assignedTo: "Mike Johnson", lastContact: "5 hours ago" },
-    { id: "4", name: "Alice Brown", company: "BrandX", email: "alice@brandx.com", stage: "lead", assignedTo: "Emily Davis", lastContact: "3 days ago" },
-    { id: "5", name: "Charlie Green", company: "GlobalTech", email: "charlie@global.com", stage: "negotiation", assignedTo: "Alex Chen", lastContact: "1 week ago" },
-  ];
+  const { data: leads, isLoading: leadsLoading } = useQuery<LeadType[]>({
+    queryKey: ["/api/leads"],
+  });
 
-  const leadColumns: Column<Lead>[] = [
+  const { data: users } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const getUserName = (userId: string | null) => {
+    if (!userId || !users) return "Unassigned";
+    const user = users.find(u => u.id === userId);
+    return user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown" : "Unknown";
+  };
+
+  const displayLeads: DisplayLead[] = leads?.map(lead => ({
+    id: lead.id,
+    name: lead.name,
+    company: lead.company,
+    email: lead.email,
+    stage: lead.stage,
+    assignedTo: getUserName(lead.assignedTo),
+    lastContact: lead.lastContact 
+      ? formatDistanceToNow(new Date(lead.lastContact), { addSuffix: true })
+      : "Never",
+  })) || [];
+
+  const leadColumns: Column<DisplayLead>[] = [
     { header: "Name", accessorKey: "name" },
     { header: "Company", accessorKey: "company" },
     { header: "Email", accessorKey: "email" },
@@ -55,6 +79,8 @@ export default function CRM() {
         <p className="text-sm text-muted-foreground mt-1">Manage your leads, clients, deals, and contacts</p>
       </div>
 
+      <LeadFormDialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen} />
+
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>
           <TabsTrigger value="leads" data-testid="tab-leads">Leads</TabsTrigger>
@@ -69,20 +95,32 @@ export default function CRM() {
             addLabel="Add Lead"
             onSearch={(q) => console.log("Search:", q)}
             onFilterStage={(s) => console.log("Filter stage:", s)}
-            onAdd={() => console.log("Add lead")}
+            onAdd={() => setLeadDialogOpen(true)}
             onExport={() => console.log("Export leads")}
           />
-          <DataTable
-            data={mockLeads}
-            columns={leadColumns}
-            onRowClick={(row) => console.log("Row clicked:", row)}
-            actions={[
-              { label: "Edit", onClick: (row) => console.log("Edit:", row) },
-              { label: "Delete", onClick: (row) => console.log("Delete:", row) },
-            ]}
-            showSelection
-            getRowId={(row) => row.id}
-          />
+          {leadsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : displayLeads.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <p>No leads yet. Add your first lead to get started.</p>
+            </div>
+          ) : (
+            <DataTable
+              data={displayLeads}
+              columns={leadColumns}
+              onRowClick={(row) => console.log("Row clicked:", row)}
+              actions={[
+                { label: "Edit", onClick: (row) => console.log("Edit:", row) },
+                { label: "Delete", onClick: (row) => console.log("Delete:", row) },
+              ]}
+              showSelection
+              getRowId={(row) => row.id}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="clients" className="space-y-4 mt-6">
@@ -93,15 +131,22 @@ export default function CRM() {
             onAdd={() => console.log("Add client")}
             onExport={() => console.log("Export clients")}
           />
-          <DataTable
-            data={mockLeads.filter(l => l.stage === "closed")}
-            columns={leadColumns}
-            onRowClick={(row) => console.log("Row clicked:", row)}
-            actions={[
-              { label: "Edit", onClick: (row) => console.log("Edit:", row) },
-              { label: "View Details", onClick: (row) => console.log("View:", row) },
-            ]}
-          />
+          {leadsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : (
+            <DataTable
+              data={displayLeads.filter(l => l.stage === "closed")}
+              columns={leadColumns}
+              onRowClick={(row) => console.log("Row clicked:", row)}
+              actions={[
+                { label: "Edit", onClick: (row) => console.log("Edit:", row) },
+                { label: "View Details", onClick: (row) => console.log("View:", row) },
+              ]}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="deals" className="space-y-4 mt-6">
@@ -113,11 +158,18 @@ export default function CRM() {
             onAdd={() => console.log("Add deal")}
             onExport={() => console.log("Export deals")}
           />
-          <DataTable
-            data={mockLeads}
-            columns={leadColumns}
-            onRowClick={(row) => console.log("Row clicked:", row)}
-          />
+          {leadsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : (
+            <DataTable
+              data={displayLeads}
+              columns={leadColumns}
+              onRowClick={(row) => console.log("Row clicked:", row)}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="contacts" className="space-y-4 mt-6">
@@ -128,11 +180,18 @@ export default function CRM() {
             onAdd={() => console.log("Add contact")}
             onExport={() => console.log("Export contacts")}
           />
-          <DataTable
-            data={mockLeads}
-            columns={leadColumns}
-            onRowClick={(row) => console.log("Row clicked:", row)}
-          />
+          {leadsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : (
+            <DataTable
+              data={displayLeads}
+              columns={leadColumns}
+              onRowClick={(row) => console.log("Row clicked:", row)}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

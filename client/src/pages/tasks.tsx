@@ -5,8 +5,13 @@ import { PriorityBadge } from "@/components/priority-badge";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TaskFormDialog } from "@/components/task-form-dialog";
+import { useQuery } from "@tanstack/react-query";
+import type { Task as TaskType, User } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
 
-type Task = {
+type DisplayTask = {
   id: string;
   title: string;
   description: string;
@@ -25,16 +30,34 @@ const statusConfig = {
 
 export default function Tasks() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
 
-  const mockTasks: Task[] = [
-    { id: "1", title: "Review Q4 Sales Report", description: "Analyze quarterly performance", priority: "high", status: "in-progress", assignedTo: "John Doe", dueDate: "Dec 15, 2024", completed: false },
-    { id: "2", title: "Update CRM Database", description: "Import new client records", priority: "medium", status: "todo", assignedTo: "Sarah Smith", dueDate: "Dec 20, 2024", completed: false },
-    { id: "3", title: "Prepare Marketing Materials", description: "Design new campaign assets", priority: "low", status: "done", assignedTo: "Mike Johnson", dueDate: "Dec 10, 2024", completed: true },
-    { id: "4", title: "Client Follow-up Call", description: "Schedule meeting with Acme Corp", priority: "high", status: "todo", assignedTo: "Emily Davis", dueDate: "Dec 12, 2024", completed: false },
-    { id: "5", title: "Team Performance Review", description: "Conduct quarterly assessments", priority: "medium", status: "in-progress", assignedTo: "Alex Chen", dueDate: "Dec 18, 2024", completed: false },
-  ];
+  const { data: tasks, isLoading: tasksLoading } = useQuery<TaskType[]>({
+    queryKey: ["/api/tasks"],
+  });
 
-  const taskColumns: Column<Task>[] = [
+  const { data: users } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const getUserName = (userId: string | null) => {
+    if (!userId || !users) return "Unassigned";
+    const user = users.find(u => u.id === userId);
+    return user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown" : "Unknown";
+  };
+
+  const displayTasks: DisplayTask[] = tasks?.map(task => ({
+    id: task.id,
+    title: task.title,
+    description: task.description || "",
+    priority: task.priority,
+    status: task.status,
+    assignedTo: getUserName(task.assignedTo),
+    dueDate: task.dueDate ? format(new Date(task.dueDate), "MMM d, yyyy") : "No due date",
+    completed: task.completed,
+  })) || [];
+
+  const taskColumns: Column<DisplayTask>[] = [
     {
       header: "",
       accessorKey: "completed",
@@ -55,7 +78,7 @@ export default function Tasks() {
     {
       header: "Status",
       accessorKey: "status",
-      cell: (value: Task["status"]) => <Badge variant={statusConfig[value].variant}>{statusConfig[value].label}</Badge>,
+      cell: (value: DisplayTask["status"]) => <Badge variant={statusConfig[value].variant}>{statusConfig[value].label}</Badge>,
     },
     {
       header: "Assigned To",
@@ -77,27 +100,41 @@ export default function Tasks() {
         <p className="text-sm text-muted-foreground mt-1">Track and manage team tasks and assignments</p>
       </div>
 
+      <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} />
+
       <TaskFilters
         onSearch={(q) => console.log("Search:", q)}
         onFilterStatus={(s) => console.log("Filter status:", s)}
         onFilterPriority={(p) => console.log("Filter priority:", p)}
-        onAddTask={() => console.log("Add task")}
+        onAddTask={() => setTaskDialogOpen(true)}
       />
 
-      <DataTable
-        data={mockTasks}
-        columns={taskColumns}
-        onRowClick={(row) => console.log("Row clicked:", row)}
-        actions={[
-          { label: "Edit", onClick: (row) => console.log("Edit:", row) },
-          { label: "Delete", onClick: (row) => console.log("Delete:", row) },
-          { label: "Assign", onClick: (row) => console.log("Assign:", row) },
-        ]}
-        showSelection
-        selectedRows={selectedRows}
-        onSelectionChange={setSelectedRows}
-        getRowId={(row) => row.id}
-      />
+      {tasksLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : displayTasks.length === 0 ? (
+        <div className="h-64 flex items-center justify-center text-muted-foreground">
+          <p>No tasks yet. Add your first task to get started.</p>
+        </div>
+      ) : (
+        <DataTable
+          data={displayTasks}
+          columns={taskColumns}
+          onRowClick={(row) => console.log("Row clicked:", row)}
+          actions={[
+            { label: "Edit", onClick: (row) => console.log("Edit:", row) },
+            { label: "Delete", onClick: (row) => console.log("Delete:", row) },
+            { label: "Assign", onClick: (row) => console.log("Assign:", row) },
+          ]}
+          showSelection
+          selectedRows={selectedRows}
+          onSelectionChange={setSelectedRows}
+          getRowId={(row) => row.id}
+        />
+      )}
     </div>
   );
 }

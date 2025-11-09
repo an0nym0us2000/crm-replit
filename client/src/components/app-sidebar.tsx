@@ -1,4 +1,4 @@
-import { Home, Users, Briefcase, CheckSquare, Settings, BarChart3, UserCog } from "lucide-react";
+import { Home, Users, Briefcase, CheckSquare, Settings, BarChart3, UserCog, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/sidebar";
 import { UserAvatar } from "./user-avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   {
@@ -55,6 +57,11 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  const userName = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}`
+    : user?.email || "User";
 
   return (
     <Sidebar>
@@ -88,14 +95,25 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
+      <SidebarFooter className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-3">
-          <UserAvatar name="Admin User" className="h-9 w-9" />
+          <UserAvatar name={userName} imageUrl={user?.profileImageUrl} className="h-9 w-9" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Admin User</p>
-            <Badge variant="secondary" className="text-xs mt-0.5">Admin</Badge>
+            <p className="text-sm font-medium truncate">{userName}</p>
+            <Badge variant="secondary" className="text-xs mt-0.5 capitalize">
+              {user?.role || "employee"}
+            </Badge>
           </div>
         </div>
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start" 
+          onClick={() => window.location.href = "/api/logout"}
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Log Out
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );

@@ -1,18 +1,30 @@
+import { useState } from "react";
 import { MetricCard } from "@/components/metric-card";
 import { ActivityCard } from "@/components/activity-card";
 import { KanbanBoard } from "@/components/kanban-board";
+import { DealFormDialog } from "@/components/deal-form-dialog";
 import { Users, Briefcase, DollarSign, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import type { Deal, User, Lead } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
 
 export default function Dashboard() {
-  const mockDeals = [
-    { id: "1", title: "Enterprise Deal", company: "Acme Corp", assignee: "John Doe", value: "50K", dueDate: "Dec 15", stage: "lead" as const },
-    { id: "2", title: "SaaS Subscription", company: "TechStart", assignee: "Sarah Smith", value: "25K", dueDate: "Dec 20", stage: "lead" as const },
-    { id: "3", title: "Consulting Project", company: "InnovateCo", assignee: "Mike Johnson", value: "75K", dueDate: "Jan 5", stage: "negotiation" as const },
-    { id: "4", title: "Marketing Campaign", company: "BrandX", assignee: "Emily Davis", value: "30K", dueDate: "Dec 18", stage: "negotiation" as const },
-    { id: "5", title: "Product License", company: "GlobalTech", assignee: "Alex Chen", value: "100K", dueDate: "Dec 10", stage: "closed" as const },
-    { id: "6", title: "Training Package", company: "SkillUp", assignee: "Lisa Wang", value: "15K", dueDate: "Dec 12", stage: "closed" as const },
-  ];
+  const [dealDialogOpen, setDealDialogOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<"lead" | "negotiation" | "closed">("lead");
+
+  const { data: deals, isLoading: dealsLoading } = useQuery<Deal[]>({
+    queryKey: ["/api/deals"],
+  });
+
+  const { data: users } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const { data: leads } = useQuery<Lead[]>({
+    queryKey: ["/api/leads"],
+  });
 
   const mockActivities = [
     { id: "1", user: "Sarah Smith", action: "added a new lead", timestamp: "2 minutes ago" },
@@ -22,6 +34,30 @@ export default function Dashboard() {
     { id: "5", user: "Alex Chen", action: "completed project review", timestamp: "3 hours ago" },
   ];
 
+  const getUserName = (userId: string | null) => {
+    if (!userId || !users) return "Unassigned";
+    const user = users.find(u => u.id === userId);
+    return user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown" : "Unknown";
+  };
+
+  const transformedDeals = deals?.map(deal => ({
+    id: deal.id,
+    title: deal.title,
+    company: deal.company,
+    assignee: getUserName(deal.assignedTo),
+    value: `$${(deal.value / 1000).toFixed(0)}K`,
+    dueDate: deal.dueDate ? format(new Date(deal.dueDate), "MMM d") : "No date",
+    stage: deal.stage,
+  })) || [];
+
+  const activeDeals = deals?.filter(d => d.stage !== "closed").length || 0;
+  const totalRevenue = deals?.filter(d => d.stage === "closed").reduce((sum, d) => sum + d.value, 0) || 0;
+  const conversionRate = (leads && deals) 
+    ? leads.length > 0 
+      ? Math.round((deals.filter(d => d.stage === "closed").length / leads.length) * 100)
+      : 0
+    : 0;
+
   return (
     <div className="space-y-6">
       <div>
@@ -29,28 +65,30 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground mt-1">Overview of your company metrics and activity</p>
       </div>
 
+      <DealFormDialog open={dealDialogOpen} onOpenChange={setDealDialogOpen} defaultStage={selectedStage} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Leads"
-          value={234}
+          value={leads?.length || 0}
           trend={{ value: "+12%", isPositive: true }}
           icon={Users}
         />
         <MetricCard
           title="Active Deals"
-          value={48}
+          value={activeDeals}
           trend={{ value: "+8%", isPositive: true }}
           icon={Briefcase}
         />
         <MetricCard
           title="Revenue"
-          value="$125K"
+          value={`$${(totalRevenue / 1000).toFixed(0)}K`}
           trend={{ value: "-3%", isPositive: false }}
           icon={DollarSign}
         />
         <MetricCard
           title="Conversion Rate"
-          value="24%"
+          value={`${conversionRate}%`}
           trend={{ value: "+5%", isPositive: true }}
           icon={TrendingUp}
         />
@@ -62,11 +100,25 @@ export default function Dashboard() {
             <CardTitle>Deal Pipeline</CardTitle>
           </CardHeader>
           <CardContent>
-            <KanbanBoard
-              deals={mockDeals}
-              onCardClick={(id) => console.log("Card clicked:", id)}
-              onAddCard={(stage) => console.log("Add card to:", stage)}
-            />
+            {dealsLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+              </div>
+            ) : transformedDeals.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-muted-foreground">
+                <p>No deals yet. Add your first deal to get started.</p>
+              </div>
+            ) : (
+              <KanbanBoard
+                deals={transformedDeals}
+                onCardClick={(id) => console.log("Card clicked:", id)}
+                onAddCard={(stage) => {
+                  setSelectedStage(stage as "lead" | "negotiation" | "closed");
+                  setDealDialogOpen(true);
+                }}
+              />
+            )}
           </CardContent>
         </Card>
 

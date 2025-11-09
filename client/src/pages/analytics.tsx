@@ -2,8 +2,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/metric-card";
 import { BarChart3, Users, CheckCircle2, DollarSign, TrendingUp } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type AnalyticsData = {
+  totalLeads: number;
+  activeDeals: number;
+  totalRevenue: number;
+  conversionRate: number;
+  taskCompletionRate: number;
+  activeEmployees: number;
+};
 
 export default function Analytics() {
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
+    queryKey: ["/api/analytics/dashboard"],
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -11,32 +26,41 @@ export default function Analytics() {
         <p className="text-sm text-muted-foreground mt-1">Track performance metrics and business insights</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="Total Revenue"
-          value="$542K"
-          trend={{ value: "+18%", isPositive: true }}
-          icon={DollarSign}
-        />
-        <MetricCard
-          title="Active Users"
-          value={1234}
-          trend={{ value: "+12%", isPositive: true }}
-          icon={Users}
-        />
-        <MetricCard
-          title="Task Completion"
-          value="87%"
-          trend={{ value: "+5%", isPositive: true }}
-          icon={CheckCircle2}
-        />
-        <MetricCard
-          title="Conversion Rate"
-          value="32%"
-          trend={{ value: "+8%", isPositive: true }}
-          icon={TrendingUp}
-        />
-      </div>
+      {analyticsLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard
+            title="Total Revenue"
+            value={`$${((analytics?.totalRevenue || 0) / 1000).toFixed(0)}K`}
+            trend={{ value: "+18%", isPositive: true }}
+            icon={DollarSign}
+          />
+          <MetricCard
+            title="Active Users"
+            value={analytics?.activeEmployees || 0}
+            trend={{ value: "+12%", isPositive: true }}
+            icon={Users}
+          />
+          <MetricCard
+            title="Task Completion"
+            value={`${analytics?.taskCompletionRate || 0}%`}
+            trend={{ value: "+5%", isPositive: true }}
+            icon={CheckCircle2}
+          />
+          <MetricCard
+            title="Conversion Rate"
+            value={`${analytics?.conversionRate || 0}%`}
+            trend={{ value: "+8%", isPositive: true }}
+            icon={TrendingUp}
+          />
+        </div>
+      )}
 
       <Tabs defaultValue="performance">
         <TabsList>

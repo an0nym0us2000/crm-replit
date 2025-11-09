@@ -5,8 +5,15 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Upload } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Settings() {
+  const { user, isLoading } = useAuth();
+
+  const fullName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "User" : "User";
+  const roleDisplay = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Employee";
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -20,57 +27,67 @@ export default function Settings() {
           <CardDescription>Update your personal information</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-6">
-            <UserAvatar name="Admin User" className="h-20 w-20" />
-            <div>
-              <Button variant="outline" data-testid="button-upload-avatar">
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Photo
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">JPG, PNG or GIF. Max size 2MB.</p>
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-20 w-20 rounded-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-6">
+                <UserAvatar name={fullName} className="h-20 w-20" />
+                <div>
+                  <Button variant="outline" data-testid="button-upload-avatar">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Photo
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">JPG, PNG or GIF. Max size 2MB.</p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                defaultValue="Admin User"
-                data-testid="input-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Input
-                id="role"
-                defaultValue="Admin"
-                disabled
-                data-testid="input-role"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                defaultValue="admin@company.com"
-                data-testid="input-email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                defaultValue="+1 (555) 000-0000"
-                data-testid="input-phone"
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    defaultValue={fullName}
+                    data-testid="input-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Input
+                    id="role"
+                    defaultValue={roleDisplay}
+                    disabled
+                    data-testid="input-role"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    defaultValue={user?.email || ""}
+                    data-testid="input-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    defaultValue="+1 (555) 000-0000"
+                    data-testid="input-phone"
+                  />
+                </div>
+              </div>
 
-          <div className="flex justify-end">
-            <Button data-testid="button-save-profile">Save Changes</Button>
-          </div>
+              <div className="flex justify-end">
+                <Button data-testid="button-save-profile">Save Changes</Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

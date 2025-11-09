@@ -1,5 +1,5 @@
 import { 
-  type User, type InsertUser,
+  type User, type UpsertUser,
   type Lead, type InsertLead,
   type Deal, type InsertDeal,
   type Employee, type InsertEmployee,
@@ -12,8 +12,9 @@ import { eq, and, or, desc } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  createUser(user: UpsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<UpsertUser>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
 
@@ -55,15 +56,30 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const result = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result[0];
+  }
+
+  async createUser(insertUser: UpsertUser): Promise<User> {
     const result = await db.insert(users).values(insertUser).returning();
     return result[0];
   }
 
-  async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User | undefined> {
+  async updateUser(id: string, updateData: Partial<UpsertUser>): Promise<User | undefined> {
     const result = await db
       .update(users)
-      .set(updateData)
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return result[0];

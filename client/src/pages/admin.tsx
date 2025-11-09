@@ -10,8 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import type { User as UserType } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type User = {
+type DisplayUser = {
   id: string;
   name: string;
   email: string;
@@ -27,15 +30,20 @@ const roleConfig = {
 };
 
 export default function Admin() {
-  const mockUsers: User[] = [
-    { id: "1", name: "Admin User", email: "admin@company.com", role: "admin", status: "active", lastLogin: "2 hours ago" },
-    { id: "2", name: "John Doe", email: "john.doe@company.com", role: "manager", status: "active", lastLogin: "1 day ago" },
-    { id: "3", name: "Sarah Smith", email: "sarah.smith@company.com", role: "manager", status: "active", lastLogin: "3 hours ago" },
-    { id: "4", name: "Mike Johnson", email: "mike.johnson@company.com", role: "employee", status: "active", lastLogin: "5 hours ago" },
-    { id: "5", name: "Emily Davis", email: "emily.davis@company.com", role: "employee", status: "inactive", lastLogin: "1 week ago" },
-  ];
+  const { data: users, isLoading: usersLoading } = useQuery<UserType[]>({
+    queryKey: ["/api/admin/users"],
+  });
 
-  const userColumns: Column<User>[] = [
+  const displayUsers: DisplayUser[] = users?.map(user => ({
+    id: user.id,
+    name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown",
+    email: user.email || "",
+    role: user.role,
+    status: user.status,
+    lastLogin: "Recently",
+  })) || [];
+
+  const userColumns: Column<DisplayUser>[] = [
     {
       header: "User",
       accessorKey: "name",
@@ -93,16 +101,28 @@ export default function Admin() {
         </Button>
       </div>
 
-      <DataTable
-        data={mockUsers}
-        columns={userColumns}
-        onRowClick={(row) => console.log("Row clicked:", row)}
-        actions={[
-          { label: "Edit Permissions", onClick: (row) => console.log("Edit permissions:", row) },
-          { label: "Deactivate", onClick: (row) => console.log("Deactivate:", row) },
-          { label: "Delete", onClick: (row) => console.log("Delete:", row) },
-        ]}
-      />
+      {usersLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : displayUsers.length === 0 ? (
+        <div className="h-64 flex items-center justify-center text-muted-foreground">
+          <p>No users found.</p>
+        </div>
+      ) : (
+        <DataTable
+          data={displayUsers}
+          columns={userColumns}
+          onRowClick={(row) => console.log("Row clicked:", row)}
+          actions={[
+            { label: "Edit Permissions", onClick: (row) => console.log("Edit permissions:", row) },
+            { label: "Deactivate", onClick: (row) => console.log("Deactivate:", row) },
+            { label: "Delete", onClick: (row) => console.log("Delete:", row) },
+          ]}
+        />
+      )}
     </div>
   );
 }
