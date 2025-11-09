@@ -5,8 +5,9 @@ import { CRMTableFilters } from "@/components/crm-table-filters";
 import { StatusBadge } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { LeadFormDialog } from "@/components/lead-form-dialog";
+import { DealFormDialog } from "@/components/deal-form-dialog";
 import { useQuery } from "@tanstack/react-query";
-import type { Lead as LeadType, User } from "@shared/schema";
+import type { Lead as LeadType, Deal as DealType, User } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
@@ -20,12 +21,27 @@ type DisplayLead = {
   lastContact: string;
 };
 
+type DisplayDeal = {
+  id: string;
+  title: string;
+  company: string;
+  value: number;
+  stage: "lead" | "negotiation" | "closed";
+  assignedTo: string;
+  dueDate: string;
+};
+
 export default function CRM() {
   const [selectedTab, setSelectedTab] = useState("leads");
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
+  const [dealDialogOpen, setDealDialogOpen] = useState(false);
 
   const { data: leads, isLoading: leadsLoading } = useQuery<LeadType[]>({
     queryKey: ["/api/leads"],
+  });
+
+  const { data: deals, isLoading: dealsLoading } = useQuery<DealType[]>({
+    queryKey: ["/api/deals"],
   });
 
   const { data: users } = useQuery<User[]>({
@@ -50,6 +66,18 @@ export default function CRM() {
       : "Never",
   })) || [];
 
+  const displayDeals: DisplayDeal[] = deals?.map(deal => ({
+    id: deal.id,
+    title: deal.title,
+    company: deal.company,
+    value: deal.value,
+    stage: deal.stage,
+    assignedTo: getUserName(deal.assignedTo),
+    dueDate: deal.dueDate 
+      ? formatDistanceToNow(new Date(deal.dueDate), { addSuffix: true })
+      : "No due date",
+  })) || [];
+
   const leadColumns: Column<DisplayLead>[] = [
     { header: "Name", accessorKey: "name" },
     { header: "Company", accessorKey: "company" },
@@ -72,6 +100,32 @@ export default function CRM() {
     { header: "Last Contact", accessorKey: "lastContact" },
   ];
 
+  const dealColumns: Column<DisplayDeal>[] = [
+    { header: "Title", accessorKey: "title" },
+    { header: "Company", accessorKey: "company" },
+    { 
+      header: "Value", 
+      accessorKey: "value",
+      cell: (value) => <span className="font-medium">${value.toLocaleString()}</span>,
+    },
+    {
+      header: "Stage",
+      accessorKey: "stage",
+      cell: (value) => <StatusBadge status={value} />,
+    },
+    {
+      header: "Assigned To",
+      accessorKey: "assignedTo",
+      cell: (value) => (
+        <div className="flex items-center gap-2">
+          <UserAvatar name={value} className="h-6 w-6" />
+          <span className="text-sm">{value}</span>
+        </div>
+      ),
+    },
+    { header: "Due Date", accessorKey: "dueDate" },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -80,6 +134,7 @@ export default function CRM() {
       </div>
 
       <LeadFormDialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen} />
+      <DealFormDialog open={dealDialogOpen} onOpenChange={setDealDialogOpen} />
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
         <TabsList>
@@ -155,19 +210,30 @@ export default function CRM() {
             addLabel="Add Deal"
             onSearch={(q) => console.log("Search:", q)}
             onFilterStage={(s) => console.log("Filter stage:", s)}
-            onAdd={() => console.log("Add deal")}
+            onAdd={() => setDealDialogOpen(true)}
             onExport={() => console.log("Export deals")}
           />
-          {leadsLoading ? (
+          {dealsLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : displayDeals.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <p>No deals yet. Add your first deal to get started.</p>
             </div>
           ) : (
             <DataTable
-              data={displayLeads}
-              columns={leadColumns}
+              data={displayDeals}
+              columns={dealColumns}
               onRowClick={(row) => console.log("Row clicked:", row)}
+              actions={[
+                { label: "Edit", onClick: (row) => console.log("Edit:", row) },
+                { label: "Delete", onClick: (row) => console.log("Delete:", row) },
+              ]}
+              showSelection
+              getRowId={(row) => row.id}
             />
           )}
         </TabsContent>

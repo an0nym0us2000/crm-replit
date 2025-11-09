@@ -30,7 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/leads", isAuthenticated, requireRole("admin", "manager"), async (req, res) => {
+  app.post("/api/leads", isAuthenticated, async (req, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
       const lead = await storage.createLead(data);
@@ -41,7 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/leads/:id", isAuthenticated, requireRole("admin", "manager"), async (req, res) => {
+  app.patch("/api/leads/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const lead = await storage.updateLead(id, req.body);
@@ -77,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/deals", isAuthenticated, requireRole("admin", "manager"), async (req, res) => {
+  app.post("/api/deals", isAuthenticated, async (req, res) => {
     try {
       const data = insertDealSchema.parse(req.body);
       const deal = await storage.createDeal(data);
@@ -88,7 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/deals/:id", isAuthenticated, requireRole("admin", "manager"), async (req, res) => {
+  app.patch("/api/deals/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const deal = await storage.updateDeal(id, req.body);
@@ -163,15 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Task endpoints
   app.get("/api/tasks", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      let tasks;
-      if (user?.role === "admin" || user?.role === "manager") {
-        tasks = await storage.getAllTasks();
-      } else {
-        tasks = await storage.getTasksByAssignee(userId);
-      }
+      const tasks = await storage.getAllTasks();
       res.json(tasks);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -179,7 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks", isAuthenticated, requireRole("admin", "manager"), async (req, res) => {
+  app.post("/api/tasks", isAuthenticated, async (req, res) => {
     try {
       const data = insertTaskSchema.parse(req.body);
       const task = await storage.createTask(data);
