@@ -208,6 +208,7 @@ export const insertPostingScheduleSchema = createInsertSchema(postingSchedule, {
   mediaUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 }).omit({
   id: true,
+  createdBy: true,
   createdAt: true,
   updatedAt: true,
 });

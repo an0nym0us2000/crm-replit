@@ -568,9 +568,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const data = insertPostingScheduleSchema.parse(req.body);
       
+      // Validate assignedTo is a valid user ID if provided
+      let validAssignedTo = null;
+      if (data.assignedTo && data.assignedTo !== "") {
+        const assignedUser = await storage.getUser(data.assignedTo);
+        if (assignedUser) {
+          validAssignedTo = data.assignedTo;
+        }
+      }
+
       const postData = {
         ...data,
         createdBy: userId,
+        // Convert empty strings to null and validate FK fields
+        assignedTo: validAssignedTo,
+        cloneOf: data.cloneOf || null,
+        publishResult: data.publishResult || null,
+        mediaUrl: data.mediaUrl || null,
+        scheduledDateTime: new Date(data.scheduledDateTime),
       };
       
       const post = await storage.createPostingSchedule(postData);
@@ -607,7 +622,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No fields provided for update" });
       }
 
-      const post = await storage.updatePostingSchedule(id, data);
+      // Validate assignedTo is a valid user ID if provided
+      let validAssignedTo = undefined;
+      if (data.assignedTo !== undefined) {
+        if (data.assignedTo === "") {
+          validAssignedTo = null;
+        } else {
+          const assignedUser = await storage.getUser(data.assignedTo);
+          validAssignedTo = assignedUser ? data.assignedTo : null;
+        }
+      }
+
+      // Convert empty strings to null for optional FK fields and dates
+      const updateData = {
+        ...data,
+        scheduledDateTime: data.scheduledDateTime ? new Date(data.scheduledDateTime) : undefined,
+        assignedTo: validAssignedTo,
+        cloneOf: data.cloneOf === "" ? null : data.cloneOf,
+        publishResult: data.publishResult === "" ? null : data.publishResult,
+        mediaUrl: data.mediaUrl === "" ? null : data.mediaUrl,
+      };
+
+      const post = await storage.updatePostingSchedule(id, updateData);
       res.json(post);
     } catch (error: any) {
       console.error("Error updating post:", error);

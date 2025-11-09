@@ -38,7 +38,7 @@ export function PostFormDialog({ open, onOpenChange, data }: PostFormDialogProps
       scheduledDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
       status: "draft",
       approvalStatus: "pending",
-      assignedTo: "",
+      assignedTo: "__NONE__",
       publishResult: "",
       cloneOf: undefined,
     },
@@ -62,7 +62,7 @@ export function PostFormDialog({ open, onOpenChange, data }: PostFormDialogProps
         scheduledDateTime: format(new Date(data.scheduledDateTime), "yyyy-MM-dd'T'HH:mm"),
         status: data.status,
         approvalStatus: data.approvalStatus,
-        assignedTo: data.assignedTo || "",
+        assignedTo: data.assignedTo || "__NONE__",
         publishResult: data.publishResult || "",
         cloneOf: data.cloneOf || undefined,
       });
@@ -75,7 +75,7 @@ export function PostFormDialog({ open, onOpenChange, data }: PostFormDialogProps
         scheduledDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
         status: "draft",
         approvalStatus: "pending",
-        assignedTo: "",
+        assignedTo: "__NONE__",
         publishResult: "",
         cloneOf: undefined,
       });
@@ -109,7 +109,12 @@ export function PostFormDialog({ open, onOpenChange, data }: PostFormDialogProps
   });
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    mutation.mutate(values);
+    // Convert special "__NONE__" value to empty string for optional fields
+    const submitValues = {
+      ...values,
+      assignedTo: values.assignedTo === "__NONE__" ? "" : values.assignedTo,
+    };
+    mutation.mutate(submitValues);
   };
 
   const getUserName = (userId: string) => {
@@ -287,14 +292,14 @@ export function PostFormDialog({ open, onOpenChange, data }: PostFormDialogProps
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assigned To (optional)</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || "__NONE__"}>
                     <FormControl>
                       <SelectTrigger data-testid="select-assigned-to">
-                        <SelectValue placeholder="Select a user" />
+                        <SelectValue placeholder="Not assigned" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__NONE__">Not assigned</SelectItem>
                       {users?.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {getUserName(user.id)}
