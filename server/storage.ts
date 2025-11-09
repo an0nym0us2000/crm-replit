@@ -5,7 +5,8 @@ import {
   type Employee, type InsertEmployee,
   type Task, type InsertTask,
   type Attendance, type InsertAttendance,
-  users, leads, deals, employees, tasks, attendance
+  type SocialProfile, type InsertSocialProfile,
+  users, leads, deals, employees, tasks, attendance, socialProfiles
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, gte, lte, isNull } from "drizzle-orm";
@@ -51,6 +52,14 @@ export interface IStorage {
   getOpenAttendanceByUser(userId: string): Promise<Attendance | undefined>;
   createAttendanceMarkIn(userId: string, date: string, markInTime: Date): Promise<Attendance>;
   completeAttendanceMarkOut(id: string, markOutTime: Date): Promise<Attendance | undefined>;
+
+  getAllSocialProfiles(): Promise<SocialProfile[]>;
+  getSocialProfile(id: string): Promise<SocialProfile | undefined>;
+  getSocialProfilesByUser(userId: string): Promise<SocialProfile[]>;
+  getSocialProfilesByPlatform(platform: string): Promise<SocialProfile[]>;
+  createSocialProfile(profile: InsertSocialProfile): Promise<SocialProfile>;
+  updateSocialProfile(id: string, profile: Partial<InsertSocialProfile>): Promise<SocialProfile | undefined>;
+  deleteSocialProfile(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -279,6 +288,49 @@ export class DbStorage implements IStorage {
       .where(eq(attendance.id, id))
       .returning();
     return result[0];
+  }
+
+  async getAllSocialProfiles(): Promise<SocialProfile[]> {
+    return db.select().from(socialProfiles).orderBy(desc(socialProfiles.connectedDate));
+  }
+
+  async getSocialProfile(id: string): Promise<SocialProfile | undefined> {
+    const result = await db.select().from(socialProfiles).where(eq(socialProfiles.id, id));
+    return result[0];
+  }
+
+  async getSocialProfilesByUser(userId: string): Promise<SocialProfile[]> {
+    return db
+      .select()
+      .from(socialProfiles)
+      .where(eq(socialProfiles.userId, userId))
+      .orderBy(desc(socialProfiles.connectedDate));
+  }
+
+  async getSocialProfilesByPlatform(platform: string): Promise<SocialProfile[]> {
+    return db
+      .select()
+      .from(socialProfiles)
+      .where(eq(socialProfiles.platform, platform))
+      .orderBy(desc(socialProfiles.connectedDate));
+  }
+
+  async createSocialProfile(profile: InsertSocialProfile): Promise<SocialProfile> {
+    const result = await db.insert(socialProfiles).values(profile).returning();
+    return result[0];
+  }
+
+  async updateSocialProfile(id: string, updateData: Partial<InsertSocialProfile>): Promise<SocialProfile | undefined> {
+    const result = await db
+      .update(socialProfiles)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(socialProfiles.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSocialProfile(id: string): Promise<void> {
+    await db.delete(socialProfiles).where(eq(socialProfiles.id, id));
   }
 }
 

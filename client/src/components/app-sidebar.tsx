@@ -1,4 +1,4 @@
-import { Home, Users, Briefcase, CheckSquare, Settings, BarChart3, UserCog, LogOut, Clock } from "lucide-react";
+import { Home, Users, Briefcase, CheckSquare, Settings, BarChart3, UserCog, LogOut, Clock, Share2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -47,6 +47,11 @@ const menuItems = [
     title: "Attendance",
     url: "/attendance",
     icon: Clock,
+  },
+  {
+    title: "Social Profiles",
+    url: "/social-profiles",
+    icon: Share2,
   },
   {
     title: "Admin",

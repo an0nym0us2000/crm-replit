@@ -143,3 +143,37 @@ export const insertAttendanceSchema = createInsertSchema(attendance).omit({
 
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type Attendance = typeof attendance.$inferSelect;
+
+export const socialProfiles = pgTable("social_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  platform: text("platform", { enum: ["linkedin", "twitter", "instagram", "youtube", "reddit"] }).notNull(),
+  username: text("username").notNull(),
+  profileUrl: text("profile_url").notNull(),
+  accountType: text("account_type", { enum: ["personal", "business"] }).notNull().default("personal"),
+  followersCount: integer("followers_count").default(0),
+  bio: text("bio"),
+  contentNiche: text("content_niche"),
+  channelName: text("channel_name"),
+  subscribersCount: integer("subscribers_count").default(0),
+  channelUrl: text("channel_url"),
+  subredditModeration: text("subreddit_moderation"),
+  connectedDate: timestamp("connected_date").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_social_profiles_user").on(table.userId),
+  index("idx_social_profiles_platform").on(table.platform),
+]);
+
+export const insertSocialProfileSchema = createInsertSchema(socialProfiles, {
+  username: z.string().min(1, "Username is required"),
+  profileUrl: z.string().url("Must be a valid URL"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSocialProfile = z.infer<typeof insertSocialProfileSchema>;
+export type SocialProfile = typeof socialProfiles.$inferSelect;

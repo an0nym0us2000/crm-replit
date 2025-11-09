@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
-import { insertLeadSchema, insertDealSchema, insertEmployeeSchema, insertTaskSchema } from "@shared/schema";
+import { insertLeadSchema, insertDealSchema, insertEmployeeSchema, insertTaskSchema, insertSocialProfileSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -397,6 +397,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching analytics:", error);
       res.status(500).json({ message: "Failed to fetch analytics" });
+    }
+  });
+
+  // Social Profiles endpoints
+  app.get("/api/social-profiles", isAuthenticated, async (req, res) => {
+    try {
+      const profiles = await storage.getAllSocialProfiles();
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching social profiles:", error);
+      res.status(500).json({ message: "Failed to fetch social profiles" });
+    }
+  });
+
+  app.get("/api/social-profiles/user/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const profiles = await storage.getSocialProfilesByUser(userId);
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching user social profiles:", error);
+      res.status(500).json({ message: "Failed to fetch user social profiles" });
+    }
+  });
+
+  app.get("/api/social-profiles/platform/:platform", isAuthenticated, async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const profiles = await storage.getSocialProfilesByPlatform(platform);
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching platform social profiles:", error);
+      res.status(500).json({ message: "Failed to fetch platform social profiles" });
+    }
+  });
+
+  app.post("/api/social-profiles", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertSocialProfileSchema.parse(req.body);
+      const profile = await storage.createSocialProfile(data);
+      res.status(201).json(profile);
+    } catch (error: any) {
+      console.error("Error creating social profile:", error);
+      res.status(400).json({ message: error.message || "Failed to create social profile" });
+    }
+  });
+
+  app.patch("/api/social-profiles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = insertSocialProfileSchema.partial().parse(req.body);
+      
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({ message: "No fields provided for update" });
+      }
+      
+      const profile = await storage.updateSocialProfile(id, data);
+      if (!profile) {
+        return res.status(404).json({ message: "Social profile not found" });
+      }
+      res.json(profile);
+    } catch (error: any) {
+      console.error("Error updating social profile:", error);
+      res.status(400).json({ message: error.message || "Failed to update social profile" });
+    }
+  });
+
+  app.delete("/api/social-profiles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSocialProfile(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting social profile:", error);
+      res.status(500).json({ message: "Failed to delete social profile" });
     }
   });
 
