@@ -386,6 +386,51 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getPostingScheduleForRole(
+    role: 'admin' | 'manager' | 'employee',
+    userId: string,
+    teamMemberIds: string[] = [],
+    filters?: {
+      status?: string;
+      profileId?: string;
+      startDate?: Date;
+      endDate?: Date;
+    }
+  ): Promise<PostingSchedule[]> {
+    const conditions = [];
+    
+    if (role === 'employee') {
+      conditions.push(
+        or(
+          eq(postingSchedule.assignedTo, userId),
+          eq(postingSchedule.createdBy, userId)
+        )
+      );
+    } else if (role === 'manager') {
+      const teamConditions = [];
+      for (const memberId of teamMemberIds) {
+        teamConditions.push(eq(postingSchedule.assignedTo, memberId));
+        teamConditions.push(eq(postingSchedule.createdBy, memberId));
+      }
+      teamConditions.push(eq(postingSchedule.assignedTo, userId));
+      teamConditions.push(eq(postingSchedule.createdBy, userId));
+      conditions.push(or(...teamConditions));
+    }
+
+    if (filters) {
+      if (filters.status) conditions.push(eq(postingSchedule.status, filters.status));
+      if (filters.profileId) conditions.push(eq(postingSchedule.profileId, filters.profileId));
+      if (filters.startDate) conditions.push(gte(postingSchedule.scheduledDateTime, filters.startDate));
+      if (filters.endDate) conditions.push(lte(postingSchedule.scheduledDateTime, filters.endDate));
+    }
+
+    return db
+      .select()
+      .from(postingSchedule)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(postingSchedule.scheduledDateTime));
+  }
+
   async createPostingSchedule(data: InsertPostingSchedule): Promise<PostingSchedule> {
     const dataToInsert = {
       ...data,

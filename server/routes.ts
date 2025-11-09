@@ -2,7 +2,33 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
-import { insertLeadSchema, insertDealSchema, insertEmployeeSchema, insertTaskSchema, insertSocialProfileSchema } from "@shared/schema";
+import { insertLeadSchema, insertDealSchema, insertEmployeeSchema, insertTaskSchema, insertSocialProfileSchema, insertPostingScheduleSchema } from "@shared/schema";
+
+function canModifyPost(
+  post: { assignedTo: string | null; createdBy: string | null },
+  userId: string,
+  userRole: 'admin' | 'manager' | 'employee',
+  teamMemberIds: string[] = []
+): boolean {
+  if (userRole === 'admin') {
+    return true;
+  }
+  
+  if (userRole === 'manager') {
+    return (
+      (post.assignedTo !== null && teamMemberIds.includes(post.assignedTo)) ||
+      (post.createdBy !== null && teamMemberIds.includes(post.createdBy)) ||
+      post.assignedTo === userId ||
+      post.createdBy === userId
+    );
+  }
+  
+  if (userRole === 'employee') {
+    return post.assignedTo === userId || post.createdBy === userId;
+  }
+  
+  return false;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
@@ -472,6 +498,254 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting social profile:", error);
       res.status(500).json({ message: "Failed to delete social profile" });
+    }
+  });
+
+  // Posting Schedule endpoints
+  app.get("/api/posting-schedule", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+
+      const filters: any = {};
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.profileId) filters.profileId = req.query.profileId;
+      if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
+      if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
+
+      const posts = await storage.getPostingScheduleForRole(user.role, userId, teamMemberIds, filters);
+      res.json(posts);
+    } catch (error) {
+      console.error("Error fetching posting schedule:", error);
+      res.status(500).json({ message: "Failed to fetch posting schedule" });
+    }
+  });
+
+  app.get("/api/posting-schedule/stats", isAuthenticated, async (req, res) => {
+    try {
+      const stats = await storage.getPostingScheduleStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching posting schedule stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/posting-schedule/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      const post = await storage.getPostingScheduleById(id);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+      
+      if (!canModifyPost(post, userId, user.role, teamMemberIds)) {
+        return res.status(403).json({ message: "You don't have permission to view this post" });
+      }
+
+      res.json(post);
+    } catch (error) {
+      console.error("Error fetching post:", error);
+      res.status(500).json({ message: "Failed to fetch post" });
+    }
+  });
+
+  app.post("/api/posting-schedule", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const data = insertPostingScheduleSchema.parse(req.body);
+      
+      const postData = {
+        ...data,
+        createdBy: userId,
+      };
+      
+      const post = await storage.createPostingSchedule(postData);
+      res.status(201).json(post);
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      res.status(400).json({ message: error.message || "Failed to create post" });
+    }
+  });
+
+  app.patch("/api/posting-schedule/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      const existingPost = await storage.getPostingScheduleById(id);
+      if (!existingPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+      
+      if (!canModifyPost(existingPost, userId, user.role, teamMemberIds)) {
+        return res.status(403).json({ message: "You don't have permission to update this post" });
+      }
+
+      const data = insertPostingScheduleSchema.partial().parse(req.body);
+      
+      if (Object.keys(data).length === 0) {
+        return res.status(400).json({ message: "No fields provided for update" });
+      }
+
+      const post = await storage.updatePostingSchedule(id, data);
+      res.json(post);
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      res.status(400).json({ message: error.message || "Failed to update post" });
+    }
+  });
+
+  app.delete("/api/posting-schedule/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      const existingPost = await storage.getPostingScheduleById(id);
+      if (!existingPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+      
+      if (!canModifyPost(existingPost, userId, user.role, teamMemberIds)) {
+        return res.status(403).json({ message: "You don't have permission to delete this post" });
+      }
+
+      await storage.deletePostingSchedule(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      res.status(500).json({ message: "Failed to delete post" });
+    }
+  });
+
+  app.post("/api/posting-schedule/bulk-update", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      const { ids, data: updateData } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Invalid or empty IDs array" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+
+      for (const id of ids) {
+        const post = await storage.getPostingScheduleById(id);
+        if (!post) continue;
+        
+        if (!canModifyPost(post, userId, user.role, teamMemberIds)) {
+          return res.status(403).json({ message: `You don't have permission to update post ${id}` });
+        }
+      }
+
+      const parsedData = insertPostingScheduleSchema.partial().parse(updateData);
+      await storage.bulkUpdatePostingSchedule(ids, parsedData);
+      res.json({ message: "Posts updated successfully", count: ids.length });
+    } catch (error: any) {
+      console.error("Error bulk updating posts:", error);
+      res.status(400).json({ message: error.message || "Failed to bulk update posts" });
+    }
+  });
+
+  app.post("/api/posting-schedule/bulk-delete", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+      
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Invalid or empty IDs array" });
+      }
+
+      const teamMemberIds = user.role === 'manager' ? await storage.getTeamMemberIds(userId) : [];
+
+      for (const id of ids) {
+        const post = await storage.getPostingScheduleById(id);
+        if (!post) continue;
+        
+        if (!canModifyPost(post, userId, user.role, teamMemberIds)) {
+          return res.status(403).json({ message: `You don't have permission to delete post ${id}` });
+        }
+      }
+
+      await storage.bulkDeletePostingSchedule(ids);
+      res.json({ message: "Posts deleted successfully", count: ids.length });
+    } catch (error) {
+      console.error("Error bulk deleting posts:", error);
+      res.status(500).json({ message: "Failed to bulk delete posts" });
+    }
+  });
+
+  app.post("/api/posting-schedule/:id/clone", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const { profileIds } = req.body;
+
+      if (!Array.isArray(profileIds) || profileIds.length === 0) {
+        return res.status(400).json({ message: "Invalid or empty profile IDs array" });
+      }
+
+      const originalPost = await storage.getPostingScheduleById(id);
+      if (!originalPost) {
+        return res.status(404).json({ message: "Original post not found" });
+      }
+
+      const clonedPosts = [];
+      for (const profileId of profileIds) {
+        const cloneData = {
+          profileId,
+          postType: originalPost.postType,
+          caption: originalPost.caption,
+          mediaUrl: originalPost.mediaUrl,
+          scheduledDateTime: originalPost.scheduledDateTime.toISOString(),
+          status: originalPost.status,
+          assignedTo: originalPost.assignedTo,
+          createdBy: userId,
+          cloneOf: originalPost.id,
+        };
+        const cloned = await storage.createPostingSchedule(cloneData);
+        clonedPosts.push(cloned);
+      }
+
+      res.status(201).json({ message: "Posts cloned successfully", posts: clonedPosts });
+    } catch (error: any) {
+      console.error("Error cloning post:", error);
+      res.status(400).json({ message: error.message || "Failed to clone post" });
     }
   });
 
