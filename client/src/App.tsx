@@ -17,6 +17,7 @@ import Tasks from "@/pages/tasks";
 import Analytics from "@/pages/analytics";
 import Attendance from "@/pages/attendance";
 import SocialProfiles from "@/pages/social-profiles";
+import PostingSchedule from "@/pages/posting-schedule";
 import Admin from "@/pages/admin";
 import Settings from "@/pages/settings";
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/analytics" component={Analytics} />
       <Route path="/attendance" component={Attendance} />
       <Route path="/social-profiles" component={SocialProfiles} />
+      <Route path="/posting-schedule" component={PostingSchedule} />
       <Route path="/admin" component={Admin} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
