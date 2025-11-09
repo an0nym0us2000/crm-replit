@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: text("role", { enum: ["admin", "manager", "employee"] }).notNull().default("employee"),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),
+  managerId: varchar("manager_id").references((): any => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -177,3 +178,39 @@ export const insertSocialProfileSchema = createInsertSchema(socialProfiles, {
 
 export type InsertSocialProfile = z.infer<typeof insertSocialProfileSchema>;
 export type SocialProfile = typeof socialProfiles.$inferSelect;
+
+export const postingSchedule = pgTable("posting_schedule", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => socialProfiles.id, { onDelete: "cascade" }).notNull(),
+  postType: text("post_type", { enum: ["text", "image", "video", "link"] }).notNull(),
+  caption: text("caption").notNull(),
+  mediaUrl: text("media_url"),
+  scheduledDateTime: timestamp("scheduled_date_time", { withTimezone: true }).notNull(),
+  status: text("status", { enum: ["draft", "scheduled", "published", "failed"] }).notNull().default("draft"),
+  approvalStatus: text("approval_status", { enum: ["pending", "approved", "rejected"] }),
+  publishResult: text("publish_result"),
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }).notNull(),
+  cloneOf: varchar("clone_of").references((): any => postingSchedule.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_posting_schedule_profile").on(table.profileId),
+  index("idx_posting_schedule_status").on(table.status),
+  index("idx_posting_schedule_scheduled_date").on(table.scheduledDateTime),
+  index("idx_posting_schedule_assigned_to").on(table.assignedTo),
+  index("idx_posting_schedule_scheduled").on(table.status).where(sql`${table.status} = 'scheduled'`),
+]);
+
+export const insertPostingScheduleSchema = createInsertSchema(postingSchedule, {
+  caption: z.string().min(1, "Caption is required"),
+  scheduledDateTime: z.string(),
+  mediaUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPostingSchedule = z.infer<typeof insertPostingScheduleSchema>;
+export type PostingSchedule = typeof postingSchedule.$inferSelect;

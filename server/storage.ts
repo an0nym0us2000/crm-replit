@@ -6,7 +6,8 @@ import {
   type Task, type InsertTask,
   type Attendance, type InsertAttendance,
   type SocialProfile, type InsertSocialProfile,
-  users, leads, deals, employees, tasks, attendance, socialProfiles
+  type PostingSchedule, type InsertPostingSchedule,
+  users, leads, deals, employees, tasks, attendance, socialProfiles, postingSchedule
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, gte, lte, isNull } from "drizzle-orm";
@@ -60,6 +61,27 @@ export interface IStorage {
   createSocialProfile(profile: InsertSocialProfile): Promise<SocialProfile>;
   updateSocialProfile(id: string, profile: Partial<InsertSocialProfile>): Promise<SocialProfile | undefined>;
   deleteSocialProfile(id: string): Promise<void>;
+
+  getPostingSchedule(filters?: {
+    profileId?: string;
+    status?: string;
+    assignedTo?: string;
+    createdBy?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<PostingSchedule[]>;
+  getPostingScheduleById(id: string): Promise<PostingSchedule | undefined>;
+  createPostingSchedule(data: InsertPostingSchedule): Promise<PostingSchedule>;
+  updatePostingSchedule(id: string, data: Partial<InsertPostingSchedule>): Promise<PostingSchedule | undefined>;
+  deletePostingSchedule(id: string): Promise<void>;
+  bulkUpdatePostingSchedule(ids: string[], data: Partial<InsertPostingSchedule>): Promise<void>;
+  bulkDeletePostingSchedule(ids: string[]): Promise<void>;
+  getPostingScheduleStats(): Promise<{
+    byPlatform: Array<{platform: string; count: number}>;
+    upcoming: number;
+    pending: number;
+  }>;
+  getTeamMemberIds(managerId: string): Promise<string[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -331,6 +353,156 @@ export class DbStorage implements IStorage {
 
   async deleteSocialProfile(id: string): Promise<void> {
     await db.delete(socialProfiles).where(eq(socialProfiles.id, id));
+  }
+
+  async getPostingSchedule(filters?: {
+    profileId?: string;
+    status?: string;
+    assignedTo?: string;
+    createdBy?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<PostingSchedule[]> {
+    const conditions = [];
+    
+    if (filters) {
+      if (filters.profileId) conditions.push(eq(postingSchedule.profileId, filters.profileId));
+      if (filters.status) conditions.push(eq(postingSchedule.status, filters.status));
+      if (filters.assignedTo) conditions.push(eq(postingSchedule.assignedTo, filters.assignedTo));
+      if (filters.createdBy) conditions.push(eq(postingSchedule.createdBy, filters.createdBy));
+      if (filters.startDate) conditions.push(gte(postingSchedule.scheduledDateTime, filters.startDate));
+      if (filters.endDate) conditions.push(lte(postingSchedule.scheduledDateTime, filters.endDate));
+    }
+
+    return db
+      .select()
+      .from(postingSchedule)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(postingSchedule.scheduledDateTime));
+  }
+
+  async getPostingScheduleById(id: string): Promise<PostingSchedule | undefined> {
+    const result = await db.select().from(postingSchedule).where(eq(postingSchedule.id, id));
+    return result[0];
+  }
+
+  async createPostingSchedule(data: InsertPostingSchedule): Promise<PostingSchedule> {
+    const dataToInsert = {
+      ...data,
+      scheduledDateTime: typeof data.scheduledDateTime === 'string' 
+        ? new Date(data.scheduledDateTime) 
+        : data.scheduledDateTime,
+    };
+    const result = await db.insert(postingSchedule).values(dataToInsert).returning();
+    return result[0];
+  }
+
+  async updatePostingSchedule(id: string, data: Partial<InsertPostingSchedule>): Promise<PostingSchedule | undefined> {
+    const dataToUpdate: any = {
+      ...data,
+      updatedAt: new Date(),
+    };
+    
+    if (data.scheduledDateTime) {
+      dataToUpdate.scheduledDateTime = typeof data.scheduledDateTime === 'string'
+        ? new Date(data.scheduledDateTime)
+        : data.scheduledDateTime;
+    }
+
+    const result = await db
+      .update(postingSchedule)
+      .set(dataToUpdate)
+      .where(eq(postingSchedule.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePostingSchedule(id: string): Promise<void> {
+    await db.delete(postingSchedule).where(eq(postingSchedule.id, id));
+  }
+
+  async bulkUpdatePostingSchedule(ids: string[], data: Partial<InsertPostingSchedule>): Promise<void> {
+    const dataToUpdate: any = {
+      ...data,
+      updatedAt: new Date(),
+    };
+    
+    if (data.scheduledDateTime) {
+      dataToUpdate.scheduledDateTime = typeof data.scheduledDateTime === 'string'
+        ? new Date(data.scheduledDateTime)
+        : data.scheduledDateTime;
+    }
+
+    await db.transaction(async (tx) => {
+      for (const id of ids) {
+        await tx
+          .update(postingSchedule)
+          .set(dataToUpdate)
+          .where(eq(postingSchedule.id, id));
+      }
+    });
+  }
+
+  async bulkDeletePostingSchedule(ids: string[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const id of ids) {
+        await tx.delete(postingSchedule).where(eq(postingSchedule.id, id));
+      }
+    });
+  }
+
+  async getPostingScheduleStats(): Promise<{
+    byPlatform: Array<{platform: string; count: number}>;
+    upcoming: number;
+    pending: number;
+  }> {
+    const allPosts = await db.select().from(postingSchedule);
+    
+    const platformCounts = await db
+      .select({
+        profileId: postingSchedule.profileId,
+        count: db.$count(postingSchedule.id)
+      })
+      .from(postingSchedule)
+      .groupBy(postingSchedule.profileId);
+
+    const profiles = await db.select().from(socialProfiles);
+    const platformMap = new Map(profiles.map(p => [p.id, p.platform]));
+    
+    const byPlatform: {[key: string]: number} = {};
+    for (const {profileId, count} of platformCounts) {
+      const platform = platformMap.get(profileId);
+      if (platform) {
+        byPlatform[platform] = (byPlatform[platform] || 0) + count;
+      }
+    }
+
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    
+    const upcoming = allPosts.filter(post => 
+      post.status === 'scheduled' && 
+      new Date(post.scheduledDateTime) <= nextWeek &&
+      new Date(post.scheduledDateTime) >= new Date()
+    ).length;
+
+    const pending = allPosts.filter(post => 
+      post.approvalStatus === 'pending'
+    ).length;
+
+    return {
+      byPlatform: Object.entries(byPlatform).map(([platform, count]) => ({platform, count})),
+      upcoming,
+      pending
+    };
+  }
+
+  async getTeamMemberIds(managerId: string): Promise<string[]> {
+    const teamMembers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.managerId, managerId));
+    return teamMembers.map(u => u.id);
   }
 }
 
