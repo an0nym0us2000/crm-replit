@@ -29,8 +29,8 @@ export function TaskFormDialog({ open, onOpenChange, data }: TaskFormDialogProps
       description: "",
       priority: "medium",
       status: "todo",
-      assignedTo: null,
-      dueDate: null,
+      assignedTo: undefined,
+      dueDate: undefined,
       completed: false,
     },
   });
@@ -46,8 +46,8 @@ export function TaskFormDialog({ open, onOpenChange, data }: TaskFormDialogProps
         description: data.description || "",
         priority: data.priority,
         status: data.status,
-        assignedTo: data.assignedTo,
-        dueDate: data.dueDate,
+        assignedTo: data.assignedTo || undefined,
+        dueDate: data.dueDate ? data.dueDate.toISOString().split('T')[0] : undefined,
         completed: data.completed,
       });
     } else {
@@ -56,8 +56,8 @@ export function TaskFormDialog({ open, onOpenChange, data }: TaskFormDialogProps
         description: "",
         priority: "medium",
         status: "todo",
-        assignedTo: null,
-        dueDate: null,
+        assignedTo: undefined,
+        dueDate: undefined,
         completed: false,
       });
     }
@@ -211,8 +211,8 @@ export function TaskFormDialog({ open, onOpenChange, data }: TaskFormDialogProps
                       <Input 
                         type="date" 
                         {...field} 
-                        value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
-                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                        value={field.value || ""}
+                        onChange={(e) => field.onChange(e.target.value || undefined)}
                         data-testid="input-task-dueDate" 
                       />
                     </FormControl>

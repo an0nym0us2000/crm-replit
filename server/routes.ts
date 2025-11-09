@@ -174,7 +174,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/tasks", isAuthenticated, async (req, res) => {
     try {
       const data = insertTaskSchema.parse(req.body);
-      const task = await storage.createTask(data);
+      // Convert dueDate string to Date object if present
+      const taskData = {
+        ...data,
+        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      };
+      const task = await storage.createTask(taskData);
       res.status(201).json(task);
     } catch (error: any) {
       console.error("Error creating task:", error);
@@ -198,7 +203,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      const updatedTask = await storage.updateTask(id, req.body);
+      // Convert dueDate string to Date object if present in update
+      const updateData = { ...req.body };
+      if (updateData.dueDate) {
+        updateData.dueDate = new Date(updateData.dueDate);
+      }
+
+      const updatedTask = await storage.updateTask(id, updateData);
       res.json(updatedTask);
     } catch (error: any) {
       console.error("Error updating task:", error);
@@ -261,6 +272,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Attendance endpoints
+  app.get("/api/attendance", isAuthenticated, requireRole("admin"), async (req, res) => {
+    try {
+      const attendance = await storage.getAllAttendance();
+      res.json(attendance);
+    } catch (error) {
+      console.error("Error fetching all attendance:", error);
+      res.status(500).json({ message: "Failed to fetch attendance" });
+    }
+  });
+
+  app.get("/api/attendance/my", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const attendance = await storage.getAttendanceByUser(userId);
+      res.json(attendance);
+    } catch (error) {
+      console.error("Error fetching my attendance:", error);
+      res.status(500).json({ message: "Failed to fetch attendance" });
+    }
+  });
+
+  app.post("/api/attendance/mark-in", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Get IST date string (YYYY-MM-DD) - Add 5.5 hours to UTC for IST
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+      const istDate = new Date(now.getTime() + istOffset);
+      const dateString = istDate.toISOString().split('T')[0];
+      
+      // Check if user already has an open attendance record
+      const openAttendance = await storage.getOpenAttendanceByUser(userId);
+      if (openAttendance) {
+        return res.status(400).json({ message: "You already have an open attendance record. Please mark out first." });
+      }
+      
+      // Check if user already marked in today
+      const todayAttendance = await storage.getAttendanceByUser(userId, dateString, dateString);
+      if (todayAttendance.length > 0) {
+        return res.status(400).json({ message: "You have already marked in today." });
+      }
+      
+      // Create new attendance record
+      const attendance = await storage.createAttendanceMarkIn(userId, dateString, now);
+      res.status(201).json(attendance);
+    } catch (error: any) {
+      console.error("Error marking in:", error);
+      res.status(400).json({ message: error.message || "Failed to mark in" });
+    }
+  });
+
+  app.patch("/api/attendance/:id/mark-out", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      // Get the specific attendance record
+      const attendanceRecord = await storage.getAttendance(id);
+      
+      if (!attendanceRecord) {
+        return res.status(404).json({ message: "Attendance record not found" });
+      }
+      
+      // Check ownership (admins can mark out for anyone)
+      if (user?.role !== "admin" && attendanceRecord.userId !== userId) {
+        return res.status(403).json({ message: "You can only mark out your own attendance" });
+      }
+      
+      // Check if already marked out
+      if (attendanceRecord.markOutTime) {
+        return res.status(400).json({ message: "Already marked out" });
+      }
+      
+      // Mark out
+      const now = new Date();
+      
+      // Validate mark out time is after mark in time
+      if (now <= attendanceRecord.markInTime) {
+        return res.status(400).json({ message: "Mark out time must be after mark in time" });
+      }
+      
+      const attendance = await storage.completeAttendanceMarkOut(id, now);
+      res.json(attendance);
+    } catch (error: any) {
+      console.error("Error marking out:", error);
+      res.status(400).json({ message: error.message || "Failed to mark out" });
     }
   });
 

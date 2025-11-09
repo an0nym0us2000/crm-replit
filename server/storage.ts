@@ -4,10 +4,11 @@ import {
   type Deal, type InsertDeal,
   type Employee, type InsertEmployee,
   type Task, type InsertTask,
-  users, leads, deals, employees, tasks
+  type Attendance, type InsertAttendance,
+  users, leads, deals, employees, tasks, attendance
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -43,6 +44,13 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, task: Partial<InsertTask>): Promise<Task | undefined>;
   deleteTask(id: string): Promise<void>;
+
+  getAllAttendance(): Promise<Attendance[]>;
+  getAttendance(id: string): Promise<Attendance | undefined>;
+  getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<Attendance[]>;
+  getOpenAttendanceByUser(userId: string): Promise<Attendance | undefined>;
+  createAttendanceMarkIn(userId: string, date: string, markInTime: Date): Promise<Attendance>;
+  completeAttendanceMarkOut(id: string, markOutTime: Date): Promise<Attendance | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -61,7 +69,7 @@ export class DbStorage implements IStorage {
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
-        target: users.id,
+        target: users.email,
         set: {
           ...userData,
           updatedAt: new Date(),
@@ -208,6 +216,69 @@ export class DbStorage implements IStorage {
 
   async deleteTask(id: string): Promise<void> {
     await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async getAllAttendance(): Promise<Attendance[]> {
+    return db.select().from(attendance).orderBy(desc(attendance.date), desc(attendance.markInTime));
+  }
+
+  async getAttendance(id: string): Promise<Attendance | undefined> {
+    const result = await db.select().from(attendance).where(eq(attendance.id, id));
+    return result[0];
+  }
+
+  async getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<Attendance[]> {
+    const conditions = [eq(attendance.userId, userId)];
+    
+    if (startDate && endDate) {
+      conditions.push(gte(attendance.date, startDate));
+      conditions.push(lte(attendance.date, endDate));
+    } else if (startDate) {
+      conditions.push(gte(attendance.date, startDate));
+    } else if (endDate) {
+      conditions.push(lte(attendance.date, endDate));
+    }
+    
+    return db
+      .select()
+      .from(attendance)
+      .where(and(...conditions))
+      .orderBy(desc(attendance.date), desc(attendance.markInTime));
+  }
+
+  async getOpenAttendanceByUser(userId: string): Promise<Attendance | undefined> {
+    const result = await db
+      .select()
+      .from(attendance)
+      .where(and(
+        eq(attendance.userId, userId),
+        isNull(attendance.markOutTime)
+      ))
+      .orderBy(desc(attendance.markInTime))
+      .limit(1);
+    return result[0];
+  }
+
+  async createAttendanceMarkIn(userId: string, date: string, markInTime: Date): Promise<Attendance> {
+    const result = await db
+      .insert(attendance)
+      .values({
+        userId,
+        date,
+        markInTime,
+        markOutTime: null,
+      })
+      .returning();
+    return result[0];
+  }
+
+  async completeAttendanceMarkOut(id: string, markOutTime: Date): Promise<Attendance | undefined> {
+    const result = await db
+      .update(attendance)
+      .set({ markOutTime, updatedAt: new Date() })
+      .where(eq(attendance.id, id))
+      .returning();
+    return result[0];
   }
 }
 

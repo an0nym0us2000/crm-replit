@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EmployeeCard } from "@/components/employee-card";
 import { CRMTableFilters } from "@/components/crm-table-filters";
+import { EmployeeFormDialog } from "@/components/employee-form-dialog";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ const roleToDepartment: Record<string, string> = {
 export default function Employees() {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -64,12 +66,14 @@ export default function Employees() {
         </p>
       </div>
 
+      <EmployeeFormDialog open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen} />
+
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <CRMTableFilters
           placeholder="Search employees..."
           addLabel="Add Employee"
           onSearch={(q) => console.log("Search:", q)}
-          onAdd={() => console.log("Add employee")}
+          onAdd={() => setEmployeeDialogOpen(true)}
         />
       </div>
 

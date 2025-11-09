@@ -111,7 +111,10 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertTaskSchema = createInsertSchema(tasks).omit({
+export const insertTaskSchema = createInsertSchema(tasks, {
+  dueDate: z.string().optional(),
+  assignedTo: z.string().nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -119,3 +122,24 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+
+export const attendance = pgTable("attendance", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  date: varchar("date").notNull(),
+  markInTime: timestamp("mark_in_time", { withTimezone: true }).notNull(),
+  markOutTime: timestamp("mark_out_time", { withTimezone: true }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_attendance_user_date").on(table.userId, table.date),
+]);
+
+export const insertAttendanceSchema = createInsertSchema(attendance).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
+export type Attendance = typeof attendance.$inferSelect;

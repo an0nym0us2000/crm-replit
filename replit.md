@@ -6,6 +6,38 @@ Launch CRM is a comprehensive internal CRM and employee management platform buil
 
 The platform provides role-based access control (Admin, Manager, Employee) with dedicated dashboards for each user type, real-time collaboration features, and comprehensive data management capabilities across CRM operations, employee directories, and task tracking.
 
+## Recent Changes
+
+**November 9, 2025 - Critical Bug Fixes:**
+
+1. **Authentication Crash Fix**
+   - Fixed server crash on login with existing users
+   - Changed `upsertUser` conflict target from `users.id` to `users.email`
+   - Now properly handles users logging in with previously used email addresses
+   - Prevents duplicate key constraint violations
+
+2. **Task Date Handling Fix**
+   - Fixed "value.toISOString is not a function" error when creating/updating tasks
+   - Backend now converts ISO date strings to Date objects before database insertion
+   - Applied to both POST /api/tasks (create) and PATCH /api/tasks/:id (update) endpoints
+   - Removed Zod schema transform to keep form handling simpler
+
+3. **Attendance Security Enhancement**
+   - Added targeted `getAttendance(id)` storage method to prevent data leakage
+   - Mark-out endpoint now uses specific record lookup instead of fetching all records
+   - Improved IST timezone handling using robust UTC+5.5 hours calculation
+   - Replaced fragile `toLocaleString()` with deterministic date math
+
+4. **Form Type Safety Improvements**
+   - Restored proper TypeScript types in task and employee form dialogs
+   - Removed `any` types in favor of specific interfaces
+   - All forms now have full type safety with no LSP errors
+
+**Testing Status:**
+- ✅ End-to-end tests passing for authentication, attendance mark-in/out, and task creation
+- ✅ All critical user flows validated and working correctly
+- ✅ No security issues or data leakage observed
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

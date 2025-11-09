@@ -15,6 +15,7 @@ import CRM from "@/pages/crm";
 import Employees from "@/pages/employees";
 import Tasks from "@/pages/tasks";
 import Analytics from "@/pages/analytics";
+import Attendance from "@/pages/attendance";
 import Admin from "@/pages/admin";
 import Settings from "@/pages/settings";
 
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/attendance" component={Attendance} />
       <Route path="/admin" component={Admin} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

@@ -31,6 +31,7 @@ const statusConfig = {
 export default function Tasks() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskType | undefined>(undefined);
 
   const { data: tasks, isLoading: tasksLoading } = useQuery<TaskType[]>({
     queryKey: ["/api/tasks"],
@@ -100,7 +101,14 @@ export default function Tasks() {
         <p className="text-sm text-muted-foreground mt-1">Track and manage team tasks and assignments</p>
       </div>
 
-      <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} />
+      <TaskFormDialog 
+        open={taskDialogOpen} 
+        onOpenChange={(open) => {
+          setTaskDialogOpen(open);
+          if (!open) setEditingTask(undefined);
+        }}
+        data={editingTask}
+      />
 
       <TaskFilters
         onSearch={(q) => console.log("Search:", q)}
@@ -125,7 +133,16 @@ export default function Tasks() {
           columns={taskColumns}
           onRowClick={(row) => console.log("Row clicked:", row)}
           actions={[
-            { label: "Edit", onClick: (row) => console.log("Edit:", row) },
+            { 
+              label: "Edit", 
+              onClick: (row) => {
+                const task = tasks?.find(t => t.id === row.id);
+                if (task) {
+                  setEditingTask(task);
+                  setTaskDialogOpen(true);
+                }
+              } 
+            },
             { label: "Delete", onClick: (row) => console.log("Delete:", row) },
             { label: "Assign", onClick: (row) => console.log("Assign:", row) },
           ]}
