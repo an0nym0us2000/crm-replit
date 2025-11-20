@@ -15,7 +15,8 @@ export const sessions = pgTable(
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
+  password: varchar("password"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -215,3 +216,34 @@ export const insertPostingScheduleSchema = createInsertSchema(postingSchedule, {
 
 export type InsertPostingSchedule = z.infer<typeof insertPostingScheduleSchema>;
 export type PostingSchedule = typeof postingSchedule.$inferSelect;
+
+export const activities = pgTable("activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  activityType: text("activity_type", {
+    enum: ["task_created", "task_assigned", "task_updated", "task_completed",
+           "post_created", "post_scheduled", "post_assigned", "post_published",
+           "lead_created", "lead_assigned", "lead_updated",
+           "deal_created", "deal_assigned", "deal_updated", "deal_closed",
+           "attendance_marked"]
+  }).notNull(),
+  entityType: text("entity_type", { enum: ["task", "post", "lead", "deal", "attendance"] }),
+  entityId: varchar("entity_id"),
+  targetUserId: varchar("target_user_id").references(() => users.id, { onDelete: "set null" }),
+  description: text("description").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_activities_user").on(table.userId),
+  index("idx_activities_type").on(table.activityType),
+  index("idx_activities_created_at").on(table.createdAt),
+  index("idx_activities_entity").on(table.entityType, table.entityId),
+]);
+
+export const insertActivitySchema = createInsertSchema(activities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type Activity = typeof activities.$inferSelect;

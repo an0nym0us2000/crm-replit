@@ -6,9 +6,16 @@ import { DealFormDialog } from "@/components/deal-form-dialog";
 import { Users, Briefcase, DollarSign, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
-import type { Deal, User, Lead } from "@shared/schema";
+import type { Deal, User, Lead, Activity } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
+
+type ActivityWithUser = Activity & {
+  userName: string;
+  userEmail: string;
+  targetUserName?: string;
+  targetUserEmail?: string;
+};
 
 export default function Dashboard() {
   const [dealDialogOpen, setDealDialogOpen] = useState(false);
@@ -26,13 +33,16 @@ export default function Dashboard() {
     queryKey: ["/api/leads"],
   });
 
-  const mockActivities = [
-    { id: "1", user: "Sarah Smith", action: "added a new lead", timestamp: "2 minutes ago" },
-    { id: "2", user: "John Doe", action: "closed a deal with Acme Corp", timestamp: "15 minutes ago" },
-    { id: "3", user: "Mike Johnson", action: "updated task status", timestamp: "1 hour ago" },
-    { id: "4", user: "Emily Davis", action: "assigned new task to team", timestamp: "2 hours ago" },
-    { id: "5", user: "Alex Chen", action: "completed project review", timestamp: "3 hours ago" },
-  ];
+  const { data: activities, isLoading: activitiesLoading } = useQuery<ActivityWithUser[]>({
+    queryKey: ["/api/activities"],
+  });
+
+  const formattedActivities = activities?.map(activity => ({
+    id: activity.id,
+    user: activity.userName,
+    action: activity.description,
+    timestamp: formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true }),
+  })) || [];
 
   const getUserName = (userId: string | null) => {
     if (!userId || !users) return "Unassigned";
@@ -122,11 +132,26 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <ActivityCard
-          title="Recent Activity"
-          activities={mockActivities}
-          onViewAll={() => console.log("View all clicked")}
-        />
+        {activitiesLoading ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <ActivityCard
+            title="Recent Activity"
+            activities={formattedActivities}
+            onViewAll={() => console.log("View all clicked")}
+          />
+        )}
       </div>
     </div>
   );

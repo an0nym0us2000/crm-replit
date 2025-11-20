@@ -1,8 +1,17 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import { validateEnv } from "./config";
+import { setupSecurityMiddleware } from "./middleware";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-const app = express();
+// Validate environment variables first
+validateEnv();
+
+export const app = express();
+
+// Security middleware (CORS, Helmet, Rate limiting, etc.)
+setupSecurityMiddleware(app);
 
 declare module 'http' {
   interface IncomingMessage {
@@ -46,15 +55,33 @@ app.use((req, res, next) => {
   next();
 });
 
+// Initialize routes and error handlers
 (async () => {
   const server = await registerRoutes(app);
 
+  // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log error in production
+    if (process.env.NODE_ENV === "production") {
+      console.error("Error:", {
+        status,
+        message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      console.error(err);
+    }
+
+    // Don't expose internal errors in production
+    const responseMessage = process.env.NODE_ENV === "production" && status === 500
+      ? "Internal Server Error"
+      : message;
+
+    res.status(status).json({ message: responseMessage });
   });
 
   // importantly only setup vite in development and after
@@ -66,16 +93,15 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  // Only start server if not running in Vercel serverless environment
+  if (!process.env.VERCEL) {
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    // Other ports are firewalled. Default to 5000 if not specified.
+    // this serves both the API and the client.
+    // It is the only port that is not firewalled.
+    const port = parseInt(process.env.PORT || '5000', 10);
+    server.listen(port, "0.0.0.0", () => {
+      log(`serving on port ${port}`);
+    });
+  }
 })();

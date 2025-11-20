@@ -1,4 +1,4 @@
-import { 
+import {
   type User, type UpsertUser,
   type Lead, type InsertLead,
   type Deal, type InsertDeal,
@@ -7,10 +7,25 @@ import {
   type Attendance, type InsertAttendance,
   type SocialProfile, type InsertSocialProfile,
   type PostingSchedule, type InsertPostingSchedule,
-  users, leads, deals, employees, tasks, attendance, socialProfiles, postingSchedule
+  type Activity, type InsertActivity,
+  users, leads, deals, employees, tasks, attendance, socialProfiles, postingSchedule, activities
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, gte, lte, isNull } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, isNull, sql } from "drizzle-orm";
+
+// Extended attendance type with user information
+export type AttendanceWithUser = Attendance & {
+  userName: string;
+  userEmail: string;
+};
+
+// Extended activity type with user information
+export type ActivityWithUser = Activity & {
+  userName: string;
+  userEmail: string;
+  targetUserName?: string;
+  targetUserEmail?: string;
+};
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -47,9 +62,9 @@ export interface IStorage {
   updateTask(id: string, task: Partial<InsertTask>): Promise<Task | undefined>;
   deleteTask(id: string): Promise<void>;
 
-  getAllAttendance(): Promise<Attendance[]>;
+  getAllAttendance(): Promise<AttendanceWithUser[]>;
   getAttendance(id: string): Promise<Attendance | undefined>;
-  getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<Attendance[]>;
+  getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<AttendanceWithUser[]>;
   getOpenAttendanceByUser(userId: string): Promise<Attendance | undefined>;
   createAttendanceMarkIn(userId: string, date: string, markInTime: Date): Promise<Attendance>;
   completeAttendanceMarkOut(id: string, markOutTime: Date): Promise<Attendance | undefined>;
@@ -82,6 +97,9 @@ export interface IStorage {
     pending: number;
   }>;
   getTeamMemberIds(managerId: string): Promise<string[]>;
+
+  getRecentActivities(limit?: number): Promise<ActivityWithUser[]>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
 }
 
 export class DbStorage implements IStorage {
@@ -249,8 +267,25 @@ export class DbStorage implements IStorage {
     await db.delete(tasks).where(eq(tasks.id, id));
   }
 
-  async getAllAttendance(): Promise<Attendance[]> {
-    return db.select().from(attendance).orderBy(desc(attendance.date), desc(attendance.markInTime));
+  async getAllAttendance(): Promise<AttendanceWithUser[]> {
+    const results = await db
+      .select({
+        id: attendance.id,
+        userId: attendance.userId,
+        date: attendance.date,
+        markInTime: attendance.markInTime,
+        markOutTime: attendance.markOutTime,
+        userName: sql<string>`COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')`,
+        userEmail: users.email,
+      })
+      .from(attendance)
+      .leftJoin(users, eq(attendance.userId, users.id))
+      .orderBy(desc(attendance.date), desc(attendance.markInTime));
+
+    return results.map(row => ({
+      ...row,
+      userName: row.userName?.trim() || row.userEmail || "Unknown User",
+    }));
   }
 
   async getAttendance(id: string): Promise<Attendance | undefined> {
@@ -258,9 +293,9 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<Attendance[]> {
+  async getAttendanceByUser(userId: string, startDate?: string, endDate?: string): Promise<AttendanceWithUser[]> {
     const conditions = [eq(attendance.userId, userId)];
-    
+
     if (startDate && endDate) {
       conditions.push(gte(attendance.date, startDate));
       conditions.push(lte(attendance.date, endDate));
@@ -269,12 +304,26 @@ export class DbStorage implements IStorage {
     } else if (endDate) {
       conditions.push(lte(attendance.date, endDate));
     }
-    
-    return db
-      .select()
+
+    const results = await db
+      .select({
+        id: attendance.id,
+        userId: attendance.userId,
+        date: attendance.date,
+        markInTime: attendance.markInTime,
+        markOutTime: attendance.markOutTime,
+        userName: sql<string>`COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')`,
+        userEmail: users.email,
+      })
       .from(attendance)
+      .leftJoin(users, eq(attendance.userId, users.id))
       .where(and(...conditions))
       .orderBy(desc(attendance.date), desc(attendance.markInTime));
+
+    return results.map(row => ({
+      ...row,
+      userName: row.userName?.trim() || row.userEmail || "Unknown User",
+    }));
   }
 
   async getOpenAttendanceByUser(userId: string): Promise<Attendance | undefined> {
@@ -548,6 +597,45 @@ export class DbStorage implements IStorage {
       .from(users)
       .where(eq(users.managerId, managerId));
     return teamMembers.map(u => u.id);
+  }
+
+  async getRecentActivities(limit: number = 20): Promise<ActivityWithUser[]> {
+    const actorUser = users;
+    const targetUser = sql`target_user`;
+
+    const results = await db
+      .select({
+        id: activities.id,
+        userId: activities.userId,
+        activityType: activities.activityType,
+        entityType: activities.entityType,
+        entityId: activities.entityId,
+        targetUserId: activities.targetUserId,
+        description: activities.description,
+        metadata: activities.metadata,
+        createdAt: activities.createdAt,
+        userName: sql<string>`COALESCE(${actorUser.firstName}, '') || ' ' || COALESCE(${actorUser.lastName}, '')`,
+        userEmail: actorUser.email,
+        targetUserName: sql<string>`COALESCE(target_user.first_name, '') || ' ' || COALESCE(target_user.last_name, '')`,
+        targetUserEmail: sql<string>`target_user.email`,
+      })
+      .from(activities)
+      .leftJoin(actorUser, eq(activities.userId, actorUser.id))
+      .leftJoin(sql`users AS target_user`, sql`${activities.targetUserId} = target_user.id`)
+      .orderBy(desc(activities.createdAt))
+      .limit(limit);
+
+    return results.map(row => ({
+      ...row,
+      userName: row.userName?.trim() || row.userEmail || "Unknown User",
+      targetUserName: row.targetUserName?.trim() || row.targetUserEmail || undefined,
+      targetUserEmail: row.targetUserEmail || undefined,
+    }));
+  }
+
+  async createActivity(activity: InsertActivity): Promise<Activity> {
+    const result = await db.insert(activities).values(activity).returning();
+    return result[0];
   }
 }
 

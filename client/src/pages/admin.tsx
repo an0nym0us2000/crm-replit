@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User as UserType } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 type DisplayUser = {
   id: string;
@@ -30,8 +31,103 @@ const roleConfig = {
 };
 
 export default function Admin() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const { data: users, isLoading: usersLoading } = useQuery<UserType[]>({
     queryKey: ["/api/admin/users"],
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update role");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Role updated",
+        description: "User role has been updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update status");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Status updated",
+        description: "User status has been updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete user");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "User deleted",
+        description: "User has been deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const displayUsers: DisplayUser[] = users?.map(user => ({
@@ -63,7 +159,7 @@ export default function Admin() {
       cell: (value, row) => (
         <Select
           value={value}
-          onValueChange={(newRole) => console.log("Change role:", row.id, newRole)}
+          onValueChange={(newRole) => updateRoleMutation.mutate({ userId: row.id, role: newRole })}
         >
           <SelectTrigger className="w-[130px]" data-testid={`select-role-${row.id}`}>
             <SelectValue />
@@ -117,9 +213,21 @@ export default function Admin() {
           columns={userColumns}
           onRowClick={(row) => console.log("Row clicked:", row)}
           actions={[
-            { label: "Edit Permissions", onClick: (row) => console.log("Edit permissions:", row) },
-            { label: "Deactivate", onClick: (row) => console.log("Deactivate:", row) },
-            { label: "Delete", onClick: (row) => console.log("Delete:", row) },
+            {
+              label: row => row.status === "active" ? "Deactivate" : "Activate",
+              onClick: (row) => updateStatusMutation.mutate({
+                userId: row.id,
+                status: row.status === "active" ? "inactive" : "active"
+              })
+            },
+            {
+              label: "Delete User",
+              onClick: (row) => {
+                if (confirm(`Are you sure you want to delete ${row.name}?`)) {
+                  deleteUserMutation.mutate(row.id);
+                }
+              }
+            },
           ]}
         />
       )}

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
+import { setupAuth, isAuthenticated, requireRole } from "./auth";
 import { insertLeadSchema, insertDealSchema, insertEmployeeSchema, insertTaskSchema, insertSocialProfileSchema, insertPostingScheduleSchema } from "@shared/schema";
 
 function canModifyPost(
@@ -32,18 +32,6 @@ function canModifyPost(
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
-
-  // Auth routes
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
 
   // Lead endpoints
   app.get("/api/leads", isAuthenticated, async (req, res) => {
@@ -197,15 +185,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks", isAuthenticated, async (req, res) => {
+  app.post("/api/tasks", isAuthenticated, async (req: any, res) => {
     try {
       const data = insertTaskSchema.parse(req.body);
+      const userId = req.user.claims.sub;
       // Convert dueDate string to Date object if present
       const taskData = {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
       };
       const task = await storage.createTask(taskData);
+
+      // Log activity
+      const assignedUser = task.assignedTo ? await storage.getUser(task.assignedTo) : null;
+      const assignedToName = assignedUser
+        ? `${assignedUser.firstName || ""} ${assignedUser.lastName || ""}`.trim() || assignedUser.email
+        : "Unassigned";
+
+      await storage.createActivity({
+        userId,
+        activityType: task.assignedTo ? "task_assigned" : "task_created",
+        entityType: "task",
+        entityId: task.id,
+        targetUserId: task.assignedTo || null,
+        description: task.assignedTo
+          ? `created and assigned task "${task.title}" to ${assignedToName}`
+          : `created task "${task.title}"`,
+        metadata: null,
+      });
+
       res.status(201).json(task);
     } catch (error: any) {
       console.error("Error creating task:", error);
@@ -236,6 +244,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedTask = await storage.updateTask(id, updateData);
+
+      // Log activity based on what changed
+      if (updateData.status === "done" || updateData.completed === true) {
+        await storage.createActivity({
+          userId,
+          activityType: "task_completed",
+          entityType: "task",
+          entityId: id,
+          targetUserId: task.assignedTo || null,
+          description: `completed task "${task.title}"`,
+          metadata: null,
+        });
+      } else if (updateData.assignedTo && updateData.assignedTo !== task.assignedTo) {
+        const assignedUser = await storage.getUser(updateData.assignedTo);
+        const assignedToName = assignedUser
+          ? `${assignedUser.firstName || ""} ${assignedUser.lastName || ""}`.trim() || assignedUser.email
+          : "Unknown";
+        await storage.createActivity({
+          userId,
+          activityType: "task_assigned",
+          entityType: "task",
+          entityId: id,
+          targetUserId: updateData.assignedTo,
+          description: `assigned task "${task.title}" to ${assignedToName}`,
+          metadata: null,
+        });
+      } else {
+        await storage.createActivity({
+          userId,
+          activityType: "task_updated",
+          entityType: "task",
+          entityId: id,
+          targetUserId: task.assignedTo || null,
+          description: `updated task "${task.title}"`,
+          metadata: null,
+        });
+      }
+
       res.json(updatedTask);
     } catch (error: any) {
       console.error("Error updating task:", error);
@@ -305,6 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/attendance", isAuthenticated, requireRole("admin"), async (req, res) => {
     try {
       const attendance = await storage.getAllAttendance();
+      console.log("Admin attendance response:", JSON.stringify(attendance, null, 2));
       res.json(attendance);
     } catch (error) {
       console.error("Error fetching all attendance:", error);
@@ -316,6 +363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const attendance = await storage.getAttendanceByUser(userId);
+      console.log("My attendance response:", JSON.stringify(attendance, null, 2));
       res.json(attendance);
     } catch (error) {
       console.error("Error fetching my attendance:", error);
@@ -347,6 +395,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create new attendance record
       const attendance = await storage.createAttendanceMarkIn(userId, dateString, now);
+
+      // Log activity
+      await storage.createActivity({
+        userId,
+        activityType: "attendance_marked",
+        entityType: "attendance",
+        entityId: attendance.id,
+        targetUserId: null,
+        description: "marked in for the day",
+        metadata: null,
+      });
+
       res.status(201).json(attendance);
     } catch (error: any) {
       console.error("Error marking in:", error);
@@ -423,6 +483,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching analytics:", error);
       res.status(500).json({ message: "Failed to fetch analytics" });
+    }
+  });
+
+  // Activities endpoints
+  app.get("/api/activities", isAuthenticated, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+      const activities = await storage.getRecentActivities(limit);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
     }
   });
 
@@ -567,11 +639,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const data = insertPostingScheduleSchema.parse(req.body);
-      
+
       // Validate assignedTo is a valid user ID if provided
       let validAssignedTo = null;
+      let assignedUser = null;
       if (data.assignedTo && data.assignedTo !== "") {
-        const assignedUser = await storage.getUser(data.assignedTo);
+        assignedUser = await storage.getUser(data.assignedTo);
         if (assignedUser) {
           validAssignedTo = data.assignedTo;
         }
@@ -587,8 +660,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mediaUrl: data.mediaUrl || null,
         scheduledDateTime: new Date(data.scheduledDateTime),
       };
-      
+
       const post = await storage.createPostingSchedule(postData);
+
+      // Get profile info for better description
+      const profile = await storage.getSocialProfile(post.profileId);
+      const platformName = profile ? `${profile.platform} (${profile.username})` : "social media";
+
+      // Log activity
+      if (validAssignedTo && assignedUser) {
+        const assignedToName = `${assignedUser.firstName || ""} ${assignedUser.lastName || ""}`.trim() || assignedUser.email;
+        await storage.createActivity({
+          userId,
+          activityType: "post_assigned",
+          entityType: "post",
+          entityId: post.id,
+          targetUserId: validAssignedTo,
+          description: `created and assigned a ${platformName} post to ${assignedToName}`,
+          metadata: null,
+        });
+      } else {
+        await storage.createActivity({
+          userId,
+          activityType: post.status === "scheduled" ? "post_scheduled" : "post_created",
+          entityType: "post",
+          entityId: post.id,
+          targetUserId: null,
+          description: post.status === "scheduled"
+            ? `scheduled a post for ${platformName}`
+            : `created a post for ${platformName}`,
+          metadata: null,
+        });
+      }
+
       res.status(201).json(post);
     } catch (error: any) {
       console.error("Error creating post:", error);

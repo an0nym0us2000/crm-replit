@@ -27,7 +27,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   onRowClick?: (row: T) => void;
   actions?: {
-    label: string;
+    label: string | ((row: T) => string);
     onClick: (row: T) => void;
   }[];
   showSelection?: boolean;
@@ -130,15 +130,19 @@ export function DataTable<T>({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {actions.map((action) => (
-                          <DropdownMenuItem
-                            key={action.label}
-                            onClick={() => action.onClick(row)}
-                            data-testid={`action-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
-                          >
-                            {action.label}
-                          </DropdownMenuItem>
-                        ))}
+                        {actions.map((action, index) => {
+                          const label = typeof action.label === 'function' ? action.label(row) : action.label;
+                          const testId = `action-${label.toLowerCase().replace(/\s+/g, '-')}`;
+                          return (
+                            <DropdownMenuItem
+                              key={index}
+                              onClick={() => action.onClick(row)}
+                              data-testid={testId}
+                            >
+                              {label}
+                            </DropdownMenuItem>
+                          );
+                        })}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

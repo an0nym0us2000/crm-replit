@@ -16,57 +16,68 @@ import { UserAvatar } from "./user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { queryClient } from "@/lib/queryClient";
 
 const menuItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: Home,
+    roles: ["admin", "manager", "employee"],
   },
   {
     title: "CRM",
     url: "/crm",
     icon: Briefcase,
+    roles: ["admin"],
   },
   {
     title: "Employees",
     url: "/employees",
     icon: Users,
+    roles: ["admin"],
   },
   {
     title: "Tasks",
     url: "/tasks",
     icon: CheckSquare,
+    roles: ["admin", "manager", "employee"],
   },
   {
     title: "Analytics",
     url: "/analytics",
     icon: BarChart3,
+    roles: ["admin"],
   },
   {
     title: "Attendance",
     url: "/attendance",
     icon: Clock,
+    roles: ["admin", "manager", "employee"],
   },
   {
     title: "Social Profiles",
     url: "/social-profiles",
     icon: Share2,
+    roles: ["admin", "manager", "employee"],
   },
   {
     title: "Posting Schedule",
     url: "/posting-schedule",
     icon: Calendar,
+    roles: ["admin", "manager", "employee"],
   },
   {
     title: "Admin",
     url: "/admin",
     icon: UserCog,
+    roles: ["admin"],
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
+    roles: ["admin", "manager", "employee"],
   },
 ];
 
@@ -97,10 +108,8 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.filter(item => {
-                if (item.title === "Admin") {
-                  return user?.role === "admin";
-                }
-                return true;
+                const userRole = user?.role || "employee";
+                return item.roles.includes(userRole);
               }).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url} data-testid={`nav-${item.title.toLowerCase()}`}>
@@ -125,10 +134,22 @@ export function AppSidebar() {
             </Badge>
           </div>
         </div>
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start" 
-          onClick={() => window.location.href = "/api/logout"}
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={async () => {
+            try {
+              await fetch("/api/logout", {
+                method: "POST",
+                credentials: "include",
+              });
+              queryClient.clear();
+              window.location.href = "/login";
+            } catch (error) {
+              console.error("Logout error:", error);
+              window.location.href = "/login";
+            }
+          }}
           data-testid="button-logout"
         >
           <LogOut className="h-4 w-4 mr-2" />

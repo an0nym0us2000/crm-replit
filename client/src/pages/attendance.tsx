@@ -4,10 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { Clock, LogIn, LogOut, Users } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/useAuth";
 import type { Attendance } from "@shared/schema";
+
+// Type for attendance with user information
+type AttendanceWithUser = Attendance & {
+  userName: string;
+  userEmail: string;
+};
 
 // Helper function to format timestamp in IST
 const formatIST = (timestamp: Date | string | null) => {
@@ -37,12 +44,23 @@ const formatDuration = (markIn: Date | string, markOut: Date | string | null) =>
 
 export default function Attendance() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
-  const { data: attendance, isLoading } = useQuery<Attendance[]>({
+  // Query for user's own attendance
+  const { data: myAttendance, isLoading: myAttendanceLoading } = useQuery<AttendanceWithUser[]>({
     queryKey: ["/api/attendance/my"],
   });
 
-  const openAttendance = attendance?.find(a => !a.markOutTime);
+  // Query for all attendance (admin only)
+  const { data: allAttendance, isLoading: allAttendanceLoading } = useQuery<AttendanceWithUser[]>({
+    queryKey: ["/api/attendance"],
+    enabled: isAdmin,
+  });
+
+  const openAttendance = myAttendance?.find(a => !a.markOutTime);
+  const isLoading = isAdmin ? allAttendanceLoading : myAttendanceLoading;
+  const attendance = myAttendance;
 
   const markInMutation = useMutation({
     mutationFn: async () => {
@@ -144,7 +162,7 @@ export default function Attendance() {
           <CardDescription>Your recent attendance records</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {myAttendanceLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -188,6 +206,70 @@ export default function Attendance() {
           )}
         </CardContent>
       </Card>
+
+      {/* Admin-only Attendance Pool */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              All Users Attendance Pool
+            </CardTitle>
+            <CardDescription>View attendance records for all employees</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {allAttendanceLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : !allAttendance || allAttendance.length === 0 ? (
+              <div className="h-32 flex items-center justify-center text-muted-foreground">
+                <p>No attendance records found.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Employee</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Mark In</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Mark Out</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allAttendance.map((record) => (
+                      <tr key={record.id} className="border-b last:border-0" data-testid={`row-all-attendance-${record.id}`}>
+                        <td className="py-3 px-4">
+                          <div>
+                            <p className="text-sm font-medium">{record.userName}</p>
+                            <p className="text-xs text-muted-foreground">{record.userEmail}</p>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-sm">
+                          {format(new Date(record.date), 'MMM d, yyyy')}
+                        </td>
+                        <td className="py-3 px-4 text-sm">
+                          {formatIST(record.markInTime)}
+                        </td>
+                        <td className="py-3 px-4 text-sm">
+                          {formatIST(record.markOutTime)}
+                        </td>
+                        <td className="py-3 px-4 text-sm">
+                          {formatDuration(record.markInTime, record.markOutTime)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
