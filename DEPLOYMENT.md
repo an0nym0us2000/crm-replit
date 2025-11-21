@@ -1,6 +1,34 @@
-# Vercel Deployment Guide
+# Deployment Guide
 
-This guide will help you deploy your CRM application to Vercel.
+‚ö†Ô∏è **IMPORTANT: This Express.js application is NOT compatible with Vercel's serverless architecture.**
+
+## ‚úÖ Recommended Deployment Platform: Railway
+
+**Please use [DEPLOYMENT-RAILWAY.md](DEPLOYMENT-RAILWAY.md) instead!**
+
+Railway is the best choice for this application because:
+- ‚úÖ Works perfectly with Express.js and sessions
+- ‚úÖ Handles WebSocket connections
+- ‚úÖ No code changes required
+- ‚úÖ Free $5 monthly credit
+- ‚úÖ Much simpler than Vercel for this use case
+
+## Why Not Vercel?
+
+Vercel is designed for serverless functions and static sites. This application uses:
+- Express sessions (requires persistent server)
+- Database connection pooling
+- Long-running processes
+
+These don't work well in Vercel's serverless environment.
+
+---
+
+# ‚ùå Vercel Deployment (Not Recommended)
+
+**This section is kept for reference only. Use Railway instead!**
+
+If you still want to try Vercel despite the limitations:
 
 ## Prerequisites
 
@@ -36,7 +64,7 @@ git push origin main
 ## Step 3: Deploy to Vercel
 
 1. Go to [vercel.com](https://vercel.com) and sign in
-2. Click "Add New" í "Project"
+2. Click "Add New" ÔøΩ "Project"
 3. Import your GitHub repository
 4. Configure your project:
    - **Framework Preset**: Other
@@ -74,7 +102,7 @@ After your first deployment, you need to push the database schema:
 
 After deployment, you'll get a Vercel URL like `https://your-app.vercel.app`
 
-1. Go to Vercel Dashboard í Your Project í Settings í Environment Variables
+1. Go to Vercel Dashboard ÔøΩ Your Project ÔøΩ Settings ÔøΩ Environment Variables
 2. Update the `ALLOWED_ORIGINS` variable to include your Vercel URL:
    ```
    https://your-app.vercel.app
@@ -131,7 +159,7 @@ If you want to create an initial admin user:
 
 To use a custom domain:
 
-1. Go to Vercel Dashboard í Your Project í Settings í Domains
+1. Go to Vercel Dashboard ÔøΩ Your Project ÔøΩ Settings ÔøΩ Domains
 2. Add your custom domain
 3. Update DNS records as instructed by Vercel
 4. Add your custom domain to `ALLOWED_ORIGINS`:
@@ -182,8 +210,8 @@ To deploy updates:
 
 - Vercel Documentation: https://vercel.com/docs
 - Neon Documentation: https://neon.tech/docs
-- Check server logs in Vercel Dashboard í Your Project í Deployments í [Latest] í Functions
+- Check server logs in Vercel Dashboard ÔøΩ Your Project ÔøΩ Deployments ÔøΩ [Latest] ÔøΩ Functions
 
 ---
 
-**Congratulations! Your CRM is now live on Vercel! <â**
+**Congratulations! Your CRM is now live on Vercel! <ÔøΩ**

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(taskkill //F //PID 11876)"
+      "Bash(taskkill //F //PID 11876)",
+      "Bash(touch:*)"
     ],
     "deny": [],
     "ask": []
