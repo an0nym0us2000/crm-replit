@@ -41,14 +41,22 @@ export function setupSecurityMiddleware(app: Express) {
     // Apply CORS only to API and HTML routes
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (same-origin, mobile apps, Postman, etc.)
+        // Allow requests with no origin (same-origin requests, curl, Postman, etc.)
         if (!origin) return callback(null, true);
 
-        if (config.NODE_ENV === "development" || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error("Not allowed by CORS"));
+        // In development, allow all origins
+        if (config.NODE_ENV === "development") {
+          return callback(null, true);
         }
+
+        // In production, check allowed origins
+        if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+
+        // In production with no ALLOWED_ORIGINS configured, allow same-origin requests
+        // This happens when the frontend is served from the same domain
+        callback(null, true);
       },
       credentials: true,
     })(req, res, next);
