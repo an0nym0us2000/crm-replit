@@ -59,32 +59,22 @@ app.use((req, res, next) => {
 
 // Initialize routes and error handlers
 (async () => {
-  // In production, serve static files FIRST (before API routes)
-  // This ensures /assets/* requests are handled before any API routes
-  if (app.get("env") === "production") {
-    const distPath = path.resolve(process.cwd(), "dist", "public");
-    if (fs.existsSync(distPath)) {
-      log(`Pre-registering static files from: ${distPath}`, "express");
-      app.use(express.static(distPath, {
-        maxAge: "1d",
-        etag: true,
-      }));
-    }
-  }
-
   const server = await registerRoutes(app);
 
-  // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Global error handler - must be AFTER routes but BEFORE static files
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    // Log error in production
+    // Log error with request info
+    log(`Error ${status} on ${req.method} ${req.path}: ${message}`, "express");
     if (process.env.NODE_ENV === "production") {
-      console.error("Error:", {
+      console.error("Error details:", {
         status,
         message,
         stack: err.stack,
+        path: req.path,
+        method: req.method,
         timestamp: new Date().toISOString(),
       });
     } else {
@@ -99,9 +89,9 @@ app.use((req, res, next) => {
     res.status(status).json({ message: responseMessage });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Serve static files and SPA routing
+  // In development, use Vite middleware
+  // In production, serve from dist/public
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
