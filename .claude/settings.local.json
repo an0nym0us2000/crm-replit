@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(taskkill //F //PID 11876)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
