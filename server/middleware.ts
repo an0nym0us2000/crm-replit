@@ -16,17 +16,32 @@ export function setupSecurityMiddleware(app: Express) {
     })
   );
 
-  // CORS configuration
+  // CORS configuration - only for API routes, NOT static files
   const allowedOrigins = config.ALLOWED_ORIGINS
     ? config.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
     : config.NODE_ENV === "development"
     ? ["http://localhost:5000", "http://localhost:5173"]
     : [];
 
-  app.use(
+  app.use((req, res, next) => {
+    // Skip CORS for static assets (JS, CSS, images, etc.)
+    if (req.path.startsWith('/assets/') ||
+        req.path.endsWith('.js') ||
+        req.path.endsWith('.css') ||
+        req.path.endsWith('.png') ||
+        req.path.endsWith('.jpg') ||
+        req.path.endsWith('.ico') ||
+        req.path.endsWith('.svg') ||
+        req.path.endsWith('.woff') ||
+        req.path.endsWith('.woff2') ||
+        req.path.endsWith('.ttf')) {
+      return next();
+    }
+
+    // Apply CORS only to API and HTML routes
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, etc.)
+        // Allow requests with no origin (same-origin, mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
 
         if (config.NODE_ENV === "development" || allowedOrigins.includes(origin)) {
@@ -36,8 +51,8 @@ export function setupSecurityMiddleware(app: Express) {
         }
       },
       credentials: true,
-    })
-  );
+    })(req, res, next);
+  });
 
   // Compression
   app.use(compression());
