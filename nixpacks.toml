@@ -6,8 +6,17 @@ cmds = ["npm ci"]
 
 [phases.build]
 cmds = [
-  "rm -rf dist",
-  "npm run build"
+  "echo '=== Cleaning old build ==='",
+  "rm -rf dist || true",
+  "rm -rf node_modules/.vite || true",
+  "echo '=== Starting build ==='",
+  "npm run build",
+  "echo '=== Build complete, checking files ==='",
+  "ls -la dist/",
+  "ls -la dist/public/",
+  "ls -la dist/public/assets/ || echo 'No assets folder'",
+  "echo '=== Checking index.html content ==='",
+  "head -20 dist/public/index.html"
 ]
 
 [start]
