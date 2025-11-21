@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import path from "path";
+import fs from "fs";
 import { validateEnv } from "./config";
 import { setupSecurityMiddleware } from "./middleware";
 import { registerRoutes } from "./routes";
@@ -57,6 +59,19 @@ app.use((req, res, next) => {
 
 // Initialize routes and error handlers
 (async () => {
+  // In production, serve static files FIRST (before API routes)
+  // This ensures /assets/* requests are handled before any API routes
+  if (app.get("env") === "production") {
+    const distPath = path.resolve(process.cwd(), "dist", "public");
+    if (fs.existsSync(distPath)) {
+      log(`Pre-registering static files from: ${distPath}`, "express");
+      app.use(express.static(distPath, {
+        maxAge: "1d",
+        etag: true,
+      }));
+    }
+  }
+
   const server = await registerRoutes(app);
 
   // Global error handler
